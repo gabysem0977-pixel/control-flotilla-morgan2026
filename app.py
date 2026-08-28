@@ -48,6 +48,10 @@ if df_raw is None or df_raw.empty:
 # ==========================================
 df_raw.columns = df_raw.columns.astype(str).str.strip()
 
+# Omitimos la última fila si contiene el total general de la hoja original de Excel
+if len(df_raw) > 0:
+    df_raw = df_raw.iloc[:-1].copy()
+
 # Manejo seguro de fechas (Columna J / índice 9)
 date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
 if date_col in df_raw.columns:
@@ -85,7 +89,7 @@ if total_col and total_col in df_raw.columns:
 else:
     df_raw["Total"] = 0
 
-# Operador y Unidad real (buscando columna de unidad o camión si existe, de lo contrario Load# completo)
+# Operador y Unidad real
 if "Unit" in df_raw.columns:
     df_raw["Unidad"] = df_raw["Unit"].astype(str)
 elif "Truck" in df_raw.columns:
@@ -132,20 +136,20 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # Preparamos los datos agrupados por Unidad y su categoría Target exacta con los rangos solicitados
+    # Preparamos los datos agrupados por Unidad y su categoría Target exacta
     df_unidades = df_filtered.groupby("Unidad")["St.Miles"].sum().reset_index()
     df_unidades.columns = ["Unidad", "Millas"]
     
     def clasificar_target(millas):
         if millas > 3000:
             return "UNIDADES 3,000 + MILLAS"
-        elif millas > 2500: # <= 3000 y > 2500
+        elif millas > 2500:
             return "UNIDADES 2,500 - 3,000 MILLAS"
-        elif millas > 2000: # <= 2500 y > 2000
+        elif millas > 2000:
             return "UNIDADES 2,000-2,500 MILLAS"
-        elif millas > 1500: # <= 2000 y > 1500
+        elif millas > 1500:
             return "UNIDADES 1,500 - 2,000 MILLAS"
-        else: # <= 1500
+        else:
             return "UNIDADES BAJO 1,500 MILLAS"
 
     df_unidades["Rango Target"] = df_unidades["Millas"].apply(clasificar_target)
