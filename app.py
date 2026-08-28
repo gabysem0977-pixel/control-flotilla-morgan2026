@@ -130,18 +130,18 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # Preparamos los datos agrupados por Unidad y su categoría Target corregida
+    # Preparamos los datos agrupados por Unidad y su categoría Target exacta
     df_unidades = df_filtered.groupby("Unidad")["St.Miles"].sum().reset_index()
     df_unidades.columns = ["Unidad", "Millas"]
     
     def clasificar_target(millas):
-        if millas >= 3000:
+        if millas > 3000:
             return "UNIDADES 3,000 + MILLAS"
-        elif millas >= 2500:
+        elif millas > 2500:
             return "UNIDADES 2,500 - 3,000 MILLAS"
-        elif millas >= 2000:
+        elif millas > 2000:
             return "UNIDADES 2,000-2,500 MILLAS"
-        elif millas >= 1500:
+        elif millas > 1500:
             return "UNIDADES 1,500 - 2,000 MILLAS"
         else:
             return "UNIDADES BAJO 1,500 MILLAS"
@@ -289,13 +289,13 @@ elif modo_analisis == "Periodos Definidos":
         df_resumen_periodo.columns = ["Unidad", "Millas Acumuladas"]
         
         def clasificar_target(millas):
-            if millas >= 3000:
+            if millas > 3000:
                 return "UNIDADES 3,000 + MILLAS"
-            elif millas >= 2500:
+            elif millas > 2500:
                 return "UNIDADES 2,500 - 3,000 MILLAS"
-            elif millas >= 2000:
+            elif millas > 2000:
                 return "UNIDADES 2,000-2,500 MILLAS"
-            elif millas >= 1500:
+            elif millas > 1500:
                 return "UNIDADES 1,500 - 2,000 MILLAS"
             else:
                 return "UNIDADES BAJO 1,500 MILLAS"
