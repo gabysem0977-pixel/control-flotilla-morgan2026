@@ -1,9 +1,8 @@
 import datetime
-import glob
-import os
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -17,104 +16,84 @@ st.set_page_config(
 # Constante de Negocio
 OBJETIVO_MILLAS_SEMANAL = 3000
 
+st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
+st.markdown(f"Vista general consolidada. **Objetivo semanal por unidad:** {OBJETIVO_MILLAS_SEMANAL:,.0f} millas.")
+st.markdown("---")
+
 # ==========================================
-# 1. CARGA AUTOMÁTICA Y SILENCIOSA DE REPORTES
+# 1. CONEXIÓN SEGURA A LA NUBE (GOOGLE SHEETS)
 # ==========================================
-@st.cache_data
-def load_all_data():
-    data_folder = "data"
-    
-    if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
-        return pd.DataFrame()
-    
-    # Buscamos tanto .xlsx como .xls
-    excel_files = glob.glob(os.path.join(data_folder, "*.xlsx")) + glob.glob(os.path.join(data_folder, "*.xls"))
-    
-    if not excel_files:
-        return pd.DataFrame()
-    
-    dfs = []
-    for file in excel_files:
-        df_temp = None
-        # Intentamos leer con openpyxl (.xlsx) omitiendo filas de cabecera si es necesario (fila 8 o skiprows ajustado)
-        try:
-            df_temp = pd.read_excel(file, skiprows=7, engine="openpyxl")
-        except Exception:
-            try:
-                df_temp = pd.read_excel(file, skiprows=7, engine="xlrd")
-            except Exception:
-                pass 
-                
-        if df_temp is not None and not df_temp.empty:
-            dfs.append(df_temp)
-            
-    if not dfs:
-        return pd.DataFrame()
-        
-    df = pd.concat(dfs, ignore_index=True)
-    
-    # Limpieza de nombres de columnas
-    df.columns = df.columns.astype(str).str.strip()
-    
-    # Limpieza general de datos clave si existen
-    if "Load#" in df.columns and "Customer" in df.columns:
-        df = df.dropna(subset=["Load#", "Customer"])
-    
-    # Manejo seguro de fechas para columna J o Pickup/Delivery
-    date_col = df.columns[9] if len(df.columns) >= 10 else "Pickup"
-    if date_col in df.columns:
-        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-        df["Pickup"] = df[date_col]
-    elif "Pickup" in df.columns:
-        df["Pickup"] = pd.to_datetime(df["Pickup"], errors="coerce")
-    else:
-        df["Pickup"] = pd.NaT
+conn = st.connection("gsheets", type=GSheetsConnection)
+url_excel_agosto = "https://docs.google.com/spreadsheets/d/1d2iBvDFT03GvtsLtLOxkEMNK5xiEp06cY-yPG7m8ITE/edit?usp=sharing"
 
-    df["Dia"] = df["Pickup"].dt.date
-    df["Anio"] = df["Pickup"].dt.isocalendar().year
-    df["SemanaNum"] = df["Pickup"].dt.isocalendar().week
-    
-    if "Orig-Dest" in df.columns:
-        splitted = df["Orig-Dest"].str.split(" - ", n=1, expand=True)
-        df["Origen"] = splitted[0].str.strip()
-        df["Destino"] = splitted[1].str.strip()
-    elif "Destino" not in df.columns:
-        df["Destino"] = "Desconocido"
-        
-    # Millas y Totales
-    miles_col = "L.Miles" if "L.Miles" in df.columns else df.columns[3] if len(df.columns) > 3 else None
-    if miles_col and miles_col in df.columns:
-        df["L.Miles"] = pd.to_numeric(df[miles_col], errors="coerce").fillna(0)
-    else:
-        df["L.Miles"] = 0
+@st.cache_data(ttl=600)
+def load_data(url):
+    try:
+        # Fila 8 como cabecera (header=7)
+        data = conn.read(spreadsheet=url, header=7)
+        return data
+    except Exception as e:
+        st.error(f"Error al conectar con la base de datos: {e}")
+        return None
 
-    total_col = "Total" if "Total" in df.columns else df.columns[4] if len(df.columns) > 4 else None
-    if total_col and total_col in df.columns:
-        df["Total"] = pd.to_numeric(df[total_col], errors="coerce").fillna(0)
-    else:
-        df["Total"] = 0
-    
-    if "Created By" in df.columns:
-        df["Operador"] = df["Created By"]
-    elif "Operador" not in df.columns:
-        df["Operador"] = "Sin Asignar"
-        
-    if "Load#" in df.columns:
-        df["Unidad"] = "Eco-" + ((pd.to_numeric(df["Load#"], errors="coerce").fillna(0) % 10) + 1).astype(str).str.zfill(3)
-    else:
-        df["Unidad"] = "Eco-001"
-    
-    return df
+with st.spinner("Descargando datos desde la nube..."):
+    df_raw = load_data(url_excel_agosto)
 
-df_raw = load_all_data()
-
-if df_raw.empty:
-    st.error("⚠️ No se encontraron reportes válidos en la carpeta `data/`. Por favor, deposita tus archivos Excel ahí.")
+if df_raw is None or df_raw.empty:
+    st.error("⚠️ No se pudieron cargar los datos de Google Sheets. Verifica los permisos de Lector en tu archivo.")
     st.stop()
 
 # ==========================================
-# 2. BARRA LATERAL (SIDEBAR Y LOGOTIPO)
+# 2. PROCESAMIENTO Y LIMPIEZA DE DATOS
+# ==========================================
+df_raw.columns = df_raw.columns.astype(str).str.strip()
+
+# Manejo seguro de fechas (Columna J / índice 9 o columnas estándar)
+date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
+if date_col in df_raw.columns:
+    df_raw[date_col] = pd.to_datetime(df_raw[date_col], errors="coerce")
+    df_raw["Pickup"] = df_raw[date_col]
+else:
+    df_raw["Pickup"] = pd.NaT
+
+df_raw["Dia"] = df_raw["Pickup"].dt.date
+df_raw["Anio"] = df_raw["Pickup"].dt.isocalendar().year
+df_raw["SemanaNum"] = df_raw["Pickup"].dt.isocalendar().week
+
+# Destinos
+if "Orig-Dest" in df_raw.columns:
+    splitted = df_raw["Orig-Dest"].str.split(" - ", n=1, expand=True)
+    df_raw["Origen"] = splitted[0].str.strip()
+    df_raw["Destino"] = splitted[1].str.strip()
+elif "Destino" not in df_raw.columns:
+    df_raw["Destino"] = "Desconocido"
+
+# Millas y Totales (Asignación robusta)
+miles_col = "L.Miles" if "L.Miles" in df_raw.columns else df_raw.columns[3] if len(df_raw.columns) > 3 else None
+if miles_col and miles_col in df_raw.columns:
+    df_raw["L.Miles"] = pd.to_numeric(df_raw[miles_col], errors="coerce").fillna(0)
+else:
+    df_raw["L.Miles"] = 0
+
+total_col = "Total" if "Total" in df_raw.columns else df_raw.columns[4] if len(df_raw.columns) > 4 else None
+if total_col and total_col in df_raw.columns:
+    df_raw["Total"] = pd.to_numeric(df_raw[total_col], errors="coerce").fillna(0)
+else:
+    df_raw["Total"] = 0
+
+# Operador y Unidad
+if "Created By" in df_raw.columns:
+    df_raw["Operador"] = df_raw["Created By"]
+elif "Operador" not in df_raw.columns:
+    df_raw["Operador"] = "Sin Asignar"
+
+if "Load#" in df_raw.columns:
+    df_raw["Unidad"] = "Eco-" + ((pd.to_numeric(df_raw["Load#"], errors="coerce").fillna(0) % 10) + 1).astype(str).str.zfill(3)
+else:
+    df_raw["Unidad"] = "Eco-001"
+
+# ==========================================
+# 3. BARRA LATERAL (SIDEBAR Y LOGOTIPO)
 # ==========================================
 try:
     st.sidebar.image("assets/logo.png", use_container_width=True)
@@ -139,22 +118,19 @@ df_filtered = df_raw[
     (df_raw["Operador"].isin(operadores_sel))
 ]
 
-# Nota de referencia para archivo auxiliar BSCF disponible en el entorno si se requiere posteriormente
 st.sidebar.markdown("---")
 st.sidebar.info('💡 Archivo auxiliar disponible para referencia: "BSCF".')
 
 # ==========================================
-# 3. LÓGICA SEGÚN EL MODO SELECCIONADO
+# 4. LÓGICA SEGÚN EL MODO SELECCIONADO
 # ==========================================
 
 if modo_analisis == "General (Gerencia / Dirección)":
-    st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-    st.markdown(f"Vista general consolidada. **Objetivo semanal por unidad:** {OBJETIVO_MILLAS_SEMANAL:,.0f} millas.")
     
     # 4 KPIs Principales en la parte superior
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("1. Millas Totales (L.Miles)", f"{df_filtered['L.Miles'].sum():,.1f} mi", f"Meta: {OBJETIVO_MILLAS_SEMANAL} mi")
-    col2.metric("2. Tarifa Promedio (Total)", f"${df_filtered['Total'].mean():,.2f}")
+    col1.metric("1. Millas Totales", f"{df_filtered['L.Miles'].sum():,.1f} mi", f"Meta: {OBJETIVO_MILLAS_SEMANAL} mi")
+    col2.metric("2. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
     col3.metric("3. Viajes Totales", f"{len(df_filtered):,}")
     col4.metric("4. Flotilla Activa", f"{df_filtered['Unidad'].nunique()} unidades")
     
