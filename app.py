@@ -130,7 +130,7 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # Preparamos los datos agrupados por Unidad y su categoría Target
+    # Preparamos los datos agrupados por Unidad y su categoría Target corregida
     df_unidades = df_filtered.groupby("Unidad")["St.Miles"].sum().reset_index()
     df_unidades.columns = ["Unidad", "Millas"]
     
@@ -161,6 +161,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
     
     df_target_table = pd.DataFrame({"Categoría Target": categorias_orden})
     df_target_table = df_target_table.merge(conteo_targets, on="Categoría Target", how="left").fillna(0)
+    df_target_table["Cantidad de Unidades"] = df_target_table["Cantidad de Unidades"].astype(int)
     
     total_unidades = df_target_table["Cantidad de Unidades"].sum()
     fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [total_unidades]})
@@ -186,7 +187,6 @@ if modo_analisis == "General (Gerencia / Dirección)":
         
     with tc2:
         st.markdown("**Gráfica de Distribución por Criterio Target**")
-        # Gráfica de barras excluyendo el total para graficar las 5 categorías limpias
         fig_target = px.bar(
             df_target_table[df_target_table["Categoría Target"] != "TOTAL"],
             x="Categoría Target",
