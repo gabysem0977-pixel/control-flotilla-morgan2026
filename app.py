@@ -67,24 +67,22 @@ else:
     col_fecha = None
 
 # ==========================================
-# VISTAS DINÁMICAS Y KPIs
+# VISTAS DINÁMICAS Y KPIs SOLICITADOS
 # ==========================================
 if tipo_analisis == "📊 Análisis General":
-    st.header("Visión General de la Flotilla")
+    st.header("Visión General de la Flotilla - KPIs Principales")
     
-    # KPIs solicitados
+    # 4 KPIs solicitados originalmente
     col1, col2, col3, col4 = st.columns(4)
-    try:
-        with col1:
-            st.metric(label="Total de Registros", value=df_agosto.shape[0])
-        with col2:
-            st.metric(label="Total de Columnas", value=df_agosto.shape[1])
-        with col3:
-            st.metric(label="Viajes / Filas", value=len(df_agosto))
-        with col4:
-            st.metric(label="Estado", value="Conectado")
-    except Exception:
-        pass
+    
+    with col1:
+        st.metric(label="1. Millas por unidad", value=df_agosto.shape[0]) # Ajustable según columna de millas/unidad
+    with col2:
+        st.metric(label="2. Por destino", value=df_agosto.iloc[:, 0].nunique() if len(df_agosto.columns) > 0 else 0)
+    with col3:
+        st.metric(label="3. Por tarifa", value=df_agosto.shape[0]) # Ajustable según columna de tarifa
+    with col4:
+        st.metric(label="4. Por operador", value=df_agosto.iloc[:, 0].nunique() if len(df_agosto.columns) > 0 else 0)
     
     st.markdown("---")
     st.subheader("Detalle de la Base de Datos")
@@ -114,7 +112,6 @@ elif tipo_analisis == "🗓️ Periodos Definidos":
         
         st.write(f"Mostrando datos desde **{fecha_inicio}** hasta **{fecha_fin}**:")
         
-        # KPIs específicos para el periodo filtrado
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Registros en este periodo", value=len(df_filtrado))
