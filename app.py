@@ -67,23 +67,47 @@ else:
     col_fecha = None
 
 # ==========================================
-# VISTAS DINÁMICAS Y KPIs SOLICITADOS
+# VISTAS DINÁMICAS, KPIS Y GRÁFICAS
 # ==========================================
 if tipo_analisis == "📊 Análisis General":
-    st.header("Visión General de la Flotilla - KPIs Principales")
+    st.header("Visión General de la Flotilla - KPIs y Gráficas")
     
-    # 4 KPIs solicitados originalmente
+    # 4 KPIs solicitados
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(label="1. Millas por unidad", value=df_agosto.shape[0]) # Ajustable según columna de millas/unidad
+        st.metric(label="1. Millas por unidad", value=df_agosto.shape[0])
     with col2:
         st.metric(label="2. Por destino", value=df_agosto.iloc[:, 0].nunique() if len(df_agosto.columns) > 0 else 0)
     with col3:
-        st.metric(label="3. Por tarifa", value=df_agosto.shape[0]) # Ajustable según columna de tarifa
+        st.metric(label="3. Por tarifa", value=df_agosto.shape[0])
     with col4:
         st.metric(label="4. Por operador", value=df_agosto.iloc[:, 0].nunique() if len(df_agosto.columns) > 0 else 0)
     
+    st.markdown("---")
+    
+    # Sección de Gráficas para el Análisis General
+    st.subheader("📈 Gráficas de Rendimiento")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Distribución por Registros / Filas**")
+        if len(df_agosto.columns) > 1:
+            conteo_cat = df_agosto.iloc[:, 1].value_counts().head(10)
+            st.bar_chart(conteo_cat)
+        else:
+            st.info("No hay suficientes columnas para generar esta gráfica.")
+            
+    with c2:
+        st.markdown("**Evolución Temporal (Columna J)**")
+        if col_fecha and col_fecha in df_agosto.columns:
+            df_temp = df_agosto.dropna(subset=[col_fecha]).copy()
+            df_temp['MesDia'] = df_temp[col_fecha].dt.strftime('%m-%d')
+            conteo_tiempo = df_temp['MesDia'].value_counts().sort_index()
+            st.line_chart(conteo_tiempo)
+        else:
+            st.info("Columna J no disponible para gráfica temporal.")
+
     st.markdown("---")
     st.subheader("Detalle de la Base de Datos")
     st.dataframe(df_agosto, use_container_width=True)
