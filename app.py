@@ -118,9 +118,6 @@ df_filtered = df_raw[
     (df_raw["Operador"].isin(operadores_sel))
 ]
 
-st.sidebar.markdown("---")
-st.sidebar.info('💡 Archivo auxiliar disponible para referencia: "BSCF".')
-
 # ==========================================
 # 4. LÓGICA SEGÚN EL MODO SELECCIONADO
 # ==========================================
