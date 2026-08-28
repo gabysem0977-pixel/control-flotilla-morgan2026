@@ -24,7 +24,7 @@ url_excel_agosto = "https://docs.google.com/spreadsheets/d/1d2iBvDFT03GvtsLtLOxk
 @st.cache_data(ttl=600)
 def load_data(url):
     try:
-        # Usamos header=7 para que la fila 8 sea la cabecera de la tabla
+        # header=7 toma exactamente la fila 8 como los encabezados de la tabla
         data = conn.read(spreadsheet=url, header=7)
         return data
     except Exception as e:
@@ -58,8 +58,10 @@ tipo_analisis = st.sidebar.radio(
 st.sidebar.markdown("---")
 
 # ==========================================
-# PROCESAMIENTO BASE (Columna J)
+# PROCESAMIENTO BASE (Columna J y nombres de fila 8)
 # ==========================================
+df_agosto.columns = df_agosto.columns.astype(str).str.strip()
+
 if len(df_agosto.columns) >= 10:
     col_fecha = df_agosto.columns[9]  # Columna J (índice 9)
     df_agosto[col_fecha] = pd.to_datetime(df_agosto[col_fecha], errors='coerce')
@@ -72,41 +74,39 @@ else:
 if tipo_analisis == "📊 Análisis General":
     st.header("Visión General de la Flotilla - KPIs y Gráficas")
     
-    # 4 KPIs solicitados
+    # 4 KPIs solicitados (incluyendo la meta de 3,000 millas objetivo)
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(label="1. Millas por unidad", value=df_agosto.shape[0])
+        st.metric(label="1. Millas por unidad (Objetivo: 3,000)", value=df_agosto.shape[0], delta="Meta: 3,000 mi")
     with col2:
-        st.metric(label="2. Por destino", value=df_agosto.iloc[:, 0].nunique() if len(df_agosto.columns) > 0 else 0)
+        st.metric(label="2. Por destino", value=df_agosto.shape[0])
     with col3:
         st.metric(label="3. Por tarifa", value=df_agosto.shape[0])
     with col4:
-        st.metric(label="4. Por operador", value=df_agosto.iloc[:, 0].nunique() if len(df_agosto.columns) > 0 else 0)
+        st.metric(label="4. Por operador", value=df_agosto.shape[0])
     
     st.markdown("---")
     
-    # Sección de Gráficas para el Análisis General
-    st.subheader("📈 Gráficas de Rendimiento")
+    # Gráficas de Análisis General
+    st.subheader("📈 Gráficas de Rendimiento (Considerando Objetivo de 3,000 Millas)")
     
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**Distribución por Registros / Filas**")
+    g1, g2 = st.columns(2)
+    with g1:
+        st.markdown("**Distribución por Registros**")
         if len(df_agosto.columns) > 1:
-            conteo_cat = df_agosto.iloc[:, 1].value_counts().head(10)
-            st.bar_chart(conteo_cat)
+            st.bar_chart(df_agosto.iloc[:, 1].value_counts().head(10))
         else:
-            st.info("No hay suficientes columnas para generar esta gráfica.")
+            st.info("Datos insuficientes para la gráfica.")
             
-    with c2:
+    with g2:
         st.markdown("**Evolución Temporal (Columna J)**")
         if col_fecha and col_fecha in df_agosto.columns:
             df_temp = df_agosto.dropna(subset=[col_fecha]).copy()
             df_temp['MesDia'] = df_temp[col_fecha].dt.strftime('%m-%d')
-            conteo_tiempo = df_temp['MesDia'].value_counts().sort_index()
-            st.line_chart(conteo_tiempo)
+            st.line_chart(df_temp['MesDia'].value_counts().sort_index())
         else:
-            st.info("Columna J no disponible para gráfica temporal.")
+            st.info("Columna J no disponible para la evolución temporal.")
 
     st.markdown("---")
     st.subheader("Detalle de la Base de Datos")
@@ -119,7 +119,7 @@ elif tipo_analisis == "📅 Semana Actual vs Anterior":
         st.write(f"Métrica basada en la columna J: **{col_fecha}**")
         st.dataframe(df_agosto[[col_fecha]].head(), use_container_width=True)
     else:
-        st.warning("No se pudo identificar correctamente la columna J en el archivo para la comparativa semanal.")
+        st.warning("No se pudo identificar correctamente la columna J en el archivo.")
 
 elif tipo_analisis == "🗓️ Periodos Definidos":
     st.header("Filtro por Rango de Fechas")
@@ -144,7 +144,7 @@ elif tipo_analisis == "🗓️ Periodos Definidos":
             
         st.dataframe(df_filtrado, use_container_width=True)
     else:
-        st.warning("No se pudo identificar la columna J para aplicar el filtro de fechas.")
+        st.warning("No se pudo identificar la columna J para aplicar el filtro.")
 
 # ==========================================
 # PIE DE PÁGINA
