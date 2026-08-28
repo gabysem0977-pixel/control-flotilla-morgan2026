@@ -42,6 +42,12 @@ st.success("¡Datos descargados con éxito!")
 # ==========================================
 # PANEL LATERAL (SIDEBAR)
 # ==========================================
+# Logotipo
+try:
+    st.sidebar.image("assets/logo.png", use_container_width=True)
+except Exception:
+    pass # Evita un error en pantalla si la imagen no se encuentra en la ruta especificada
+
 st.sidebar.header("Filtros y Análisis")
 
 # Selector en el panel lateral en lugar de pestañas
@@ -51,8 +57,6 @@ tipo_analisis = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-# Referencia al archivo BSCF
-st.sidebar.info('💡 Si más adelante necesitas cruzar información contable adicional, recuerda que hay un archivo que puedes referenciar llamado "BSCF".')
 
 # ==========================================
 # PROCESAMIENTO BASE
