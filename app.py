@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown(f"Vista general consolidada. **Objetivo semanal por unidad:** {OBJETIVO_MILLAS_SEMANAL:,.0f} millas.")
+st.markdown("Vista general consolidada con evaluación de rangos de St. Miles.")
 st.markdown("---")
 
 # ==========================================
@@ -68,13 +68,19 @@ if "Orig-Dest" in df_raw.columns:
 elif "Destino" not in df_raw.columns:
     df_raw["Destino"] = "Desconocido"
 
-# Millas y Totales (Asignación robusta)
-miles_col = "L.Miles" if "L.Miles" in df_raw.columns else df_raw.columns[3] if len(df_raw.columns) > 3 else None
-if miles_col and miles_col in df_raw.columns:
-    df_raw["L.Miles"] = pd.to_numeric(df_raw[miles_col], errors="coerce").fillna(0)
+# Columna St. Miles para evaluación de objetivos
+if "St. Miles" in df_raw.columns:
+    df_raw["St.Miles"] = pd.to_numeric(df_raw["St. Miles"], errors="coerce").fillna(0)
+elif "L.Miles" in df_raw.columns:
+    df_raw["St.Miles"] = pd.to_numeric(df_raw["L.Miles"], errors="coerce").fillna(0)
 else:
-    df_raw["L.Miles"] = 0
+    mile_cols = [c for c in df_raw.columns if "mile" in c.lower()]
+    if mile_cols:
+        df_raw["St.Miles"] = pd.to_numeric(df_raw[mile_cols[0]], errors="coerce").fillna(0)
+    else:
+        df_raw["St.Miles"] = 0
 
+# Totales (Tarifa)
 total_col = "Total" if "Total" in df_raw.columns else df_raw.columns[4] if len(df_raw.columns) > 4 else None
 if total_col and total_col in df_raw.columns:
     df_raw["Total"] = pd.to_numeric(df_raw[total_col], errors="coerce").fillna(0)
@@ -124,36 +130,83 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # 4 KPIs Principales en la parte superior
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("1. Millas Totales", f"{df_filtered['L.Miles'].sum():,.1f} mi", f"Meta: {OBJETIVO_MILLAS_SEMANAL} mi")
-    col2.metric("2. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
-    col3.metric("3. Viajes Totales", f"{len(df_filtered):,}")
-    col4.metric("4. Flotilla Activa", f"{df_filtered['Unidad'].nunique()} unidades")
+    # Preparamos los datos agrupados por Unidad y su categoría Target
+    df_unidades = df_filtered.groupby("Unidad")["St.Miles"].sum().reset_index()
+    df_unidades.columns = ["Unidad", "Millas"]
     
+    def clasificar_target(millas):
+        if millas >= 3000:
+            return "UNIDADES 3,000 + MILLAS"
+        elif millas >= 2500:
+            return "UNIDADES 2,500 - 3,000 MILLAS"
+        elif millas >= 2000:
+            return "UNIDADES 2,000-2,500 MILLAS"
+        elif millas >= 1500:
+            return "UNIDADES 1,500 - 2,000 MILLAS"
+        else:
+            return "UNIDADES BAJO 1,500 MILLAS"
+
+    df_unidades["Rango Target"] = df_unidades["Millas"].apply(clasificar_target)
+    
+    conteo_targets = df_unidades["Rango Target"].value_counts().reset_index()
+    conteo_targets.columns = ["Categoría Target", "Cantidad de Unidades"]
+    
+    categorias_orden = [
+        "UNIDADES 3,000 + MILLAS",
+        "UNIDADES 2,500 - 3,000 MILLAS",
+        "UNIDADES 2,000-2,500 MILLAS",
+        "UNIDADES 1,500 - 2,000 MILLAS",
+        "UNIDADES BAJO 1,500 MILLAS"
+    ]
+    
+    df_target_table = pd.DataFrame({"Categoría Target": categorias_orden})
+    df_target_table = df_target_table.merge(conteo_targets, on="Categoría Target", how="left").fillna(0)
+    
+    total_unidades = df_target_table["Cantidad de Unidades"].sum()
+    fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [total_unidades]})
+    df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
+
+    # 3 KPIs Restantes + La Tabla/Resumen de Unidades en la parte superior
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
+    col2.metric("2. Viajes Totales", f"{len(df_filtered):,}")
+    col3.metric("3. Flotilla Activa", f"{df_filtered['Unidad'].nunique()} unidades")
+    col4.metric("4. Total St. Miles", f"{df_filtered['St.Miles'].sum():,.1f} mi")
+    
+    st.markdown("---")
+    
+    # Sección dedicada al Target de Unidades Millas (Tabla + Gráfico)
+    st.subheader("🎯 Target de Unidades Millas (Evaluación por Categoría)")
+    
+    tc1, tc2 = st.columns([1, 1.5])
+    
+    with tc1:
+        st.markdown("**Tabla de Unidades por Rango**")
+        st.dataframe(df_target_table.set_index("Categoría Target"), use_container_width=True)
+        
+    with tc2:
+        st.markdown("**Gráfica de Distribución por Criterio Target**")
+        # Gráfica de barras excluyendo el total para graficar las 5 categorías limpias
+        fig_target = px.bar(
+            df_target_table[df_target_table["Categoría Target"] != "TOTAL"],
+            x="Categoría Target",
+            y="Cantidad de Unidades",
+            text="Cantidad de Unidades",
+            color="Categoría Target",
+            color_discrete_sequence=px.colors.sequential.Blues_r
+        )
+        fig_target.update_layout(xaxis_title="", yaxis_title="No. de Unidades", showlegend=False)
+        st.plotly_chart(fig_target, use_container_width=True)
+
     st.markdown("---")
     
     c1, c2 = st.columns(2)
     
     with c1:
-        st.subheader("1. 🛣️ Millas por Unidad vs. Objetivo Semanal")
-        df_unidades = df_filtered.groupby("Unidad")["L.Miles"].sum().reset_index()
-        df_unidades.columns = ["Unidad", "Millas"]
-        
-        df_unidades["Desviacion_Millas"] = df_unidades["Millas"] - OBJETIVO_MILLAS_SEMANAL
-        df_unidades["Desviacion_Porc"] = (df_unidades["Desviacion_Millas"] / OBJETIVO_MILLAS_SEMANAL) * 100
-        
+        st.subheader("1. 🛣️ Detalle de Millas por Unidad (St. Miles)")
         fig_u = px.bar(df_unidades, x="Unidad", y="Millas", text_auto='.2s', color="Millas", color_continuous_scale="Blues")
         fig_u.add_hline(y=OBJETIVO_MILLAS_SEMANAL, line_dash="dash", line_color="red", annotation_text=f"Meta: {OBJETIVO_MILLAS_SEMANAL} mi", annotation_position="bottom right")
         st.plotly_chart(fig_u, use_container_width=True)
-        
-        with st.expander("📋 Ver detalle de desviación por Unidad"):
-            df_display = df_unidades.copy()
-            df_display.columns = ["Unidad", "Millas Totales", "Dif. en Millas (vs Meta)", "% Desviación"]
-            df_display["Millas Totales"] = df_display["Millas Totales"].round(1)
-            df_display["Dif. en Millas (vs Meta)"] = df_display["Dif. en Millas (vs Meta)"].round(1)
-            df_display["% Desviación"] = df_display["% Desviación"].round(1).astype(str) + "%"
-            st.dataframe(df_display, use_container_width=True)
         
         st.subheader("3. 💰 Ingresos por Tarifa (Distribución)")
         fig_t = px.box(df_filtered, x="Destino", y="Total", color="Destino")
@@ -162,14 +215,14 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
     with c2:
         st.subheader("2. 📍 Rendimiento por Destino")
-        df_destinos = df_filtered.groupby("Destino")["L.Miles"].sum().reset_index()
-        fig_d = px.pie(df_destinos, names="Destino", values="L.Miles", hole=0.4)
+        df_destinos = df_filtered.groupby("Destino")["St.Miles"].sum().reset_index()
+        fig_d = px.pie(df_destinos, names="Destino", values="St.Miles", hole=0.4)
         st.plotly_chart(fig_d, use_container_width=True)
         
         st.subheader("4. 👤 Rendimiento por Operador / Creador")
-        df_ops = df_filtered.groupby("Operador")[["L.Miles", "Total"]].mean().reset_index()
-        fig_o = px.bar(df_ops, x="Operador", y="L.Miles", color="Total", text_auto='.2s', color_continuous_scale="Viridis")
-        fig_o.update_layout(yaxis_title="Promedio de Millas")
+        df_ops = df_filtered.groupby("Operador")[["St.Miles", "Total"]].mean().reset_index()
+        fig_o = px.bar(df_ops, x="Operador", y="St.Miles", color="Total", text_auto='.2s', color_continuous_scale="Viridis")
+        fig_o.update_layout(yaxis_title="Promedio de Millas (St. Miles)")
         st.plotly_chart(fig_o, use_container_width=True)
 
     st.markdown("---")
@@ -190,8 +243,8 @@ elif modo_analisis == "Semana Actual vs. Anterior":
         df_actual = df_filtered[df_filtered["SemanaNum"] == semana_actual]
         df_anterior = df_filtered[df_filtered["SemanaNum"] == semana_anterior]
         
-        millas_act = df_actual["L.Miles"].sum()
-        millas_ant = df_anterior["L.Miles"].sum()
+        millas_act = df_actual["St.Miles"].sum()
+        millas_ant = df_anterior["St.Miles"].sum()
         delta_millas = ((millas_act - millas_ant) / (millas_ant if millas_ant > 0 else 1)) * 100
         
         tarifa_act = df_actual["Total"].mean()
@@ -199,7 +252,7 @@ elif modo_analisis == "Semana Actual vs. Anterior":
         delta_tarifa = ((tarifa_act - tarifa_ant) / (tarifa_ant if tarifa_ant > 0 else 1)) * 100
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Millas (Semana Actual)", f"{millas_act:,.1f} mi", f"{delta_millas:+.1f}% vs semana ant.")
+        c1.metric("Millas St. (Semana Actual)", f"{millas_act:,.1f} mi", f"{delta_millas:+.1f}% vs semana ant.")
         c2.metric("Tarifa Promedio", f"${tarifa_act:,.2f}", f"{delta_tarifa:+.1f}% vs semana ant.")
         c3.metric("Cargas Registradas", f"{len(df_actual)}", f"{len(df_actual) - len(df_anterior)} vs semana ant.")
 
@@ -228,24 +281,31 @@ elif modo_analisis == "Periodos Definidos":
         
         df_periodo = df_filtered[(df_filtered["Dia"] >= f_inicio) & (df_filtered["Dia"] <= f_fin)]
         
-        total_millas_periodo = df_periodo['L.Miles'].sum()
-        st.metric("Total de Millas en el Periodo Seleccionado", f"{total_millas_periodo:,.1f} mi")
+        total_millas_periodo = df_periodo['St.Miles'].sum()
+        st.metric("Total de St. Miles en el Periodo Seleccionado", f"{total_millas_periodo:,.1f} mi")
         
         st.markdown("### 🎯 Desglose de Cumplimiento por Unidad en el Periodo")
-        df_resumen_periodo = df_periodo.groupby("Unidad")["L.Miles"].sum().reset_index()
-        df_resumen_periodo["Desviacion_Millas"] = df_resumen_periodo["L.Miles"] - OBJETIVO_MILLAS_SEMANAL
-        df_resumen_periodo["Desviacion_Porc"] = (df_resumen_periodo["Desviacion_Millas"] / OBJETIVO_MILLAS_SEMANAL) * 100
+        df_resumen_periodo = df_periodo.groupby("Unidad")["St.Miles"].sum().reset_index()
+        df_resumen_periodo.columns = ["Unidad", "Millas Acumuladas"]
         
-        df_resumen_periodo.columns = ["Unidad", "Millas Acumuladas", "Diferencia vs Meta (mi)", "% Desviación"]
-        st.dataframe(df_resumen_periodo.style.format({
-            "Millas Acumuladas": "{:,.1f}",
-            "Diferencia vs Meta (mi)": "{:+,.1f}",
-            "% Desviación": "{:+,.1f}%"
-        }), use_container_width=True)
+        def clasificar_target(millas):
+            if millas >= 3000:
+                return "UNIDADES 3,000 + MILLAS"
+            elif millas >= 2500:
+                return "UNIDADES 2,500 - 3,000 MILLAS"
+            elif millas >= 2000:
+                return "UNIDADES 2,000-2,500 MILLAS"
+            elif millas >= 1500:
+                return "UNIDADES 1,500 - 2,000 MILLAS"
+            else:
+                return "UNIDADES BAJO 1,500 MILLAS"
+
+        df_resumen_periodo["Rango Target"] = df_resumen_periodo["Millas Acumuladas"].apply(clasificar_target)
+        st.dataframe(df_resumen_periodo.style.format({"Millas Acumuladas": "{:,.1f}"}), use_container_width=True)
 
         st.markdown("---")
-        df_tiempo = df_periodo.groupby("Dia")[["L.Miles"]].sum().reset_index()
-        fig_tiempo = px.line(df_tiempo, x="Dia", y="L.Miles", markers=True, title="Evolución de Millas por Día en el Periodo")
+        df_tiempo = df_periodo.groupby("Dia")[["St.Miles"]].sum().reset_index()
+        fig_tiempo = px.line(df_tiempo, x="Dia", y="St.Miles", markers=True, title="Evolución de St. Miles por Día en el Periodo")
         fig_tiempo.update_layout(yaxis_title="Millas Totales")
         st.plotly_chart(fig_tiempo, use_container_width=True)
     else:
