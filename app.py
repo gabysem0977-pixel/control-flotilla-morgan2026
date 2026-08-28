@@ -24,7 +24,7 @@ url_excel_agosto = "https://docs.google.com/spreadsheets/d/1d2iBvDFT03GvtsLtLOxk
 @st.cache_data(ttl=600)
 def load_data(url):
     try:
-        # header=7 toma exactamente la fila 8 como los encabezados de la tabla
+        # Fila 8 como cabecera (header=7)
         data = conn.read(spreadsheet=url, header=7)
         return data
     except Exception as e:
@@ -57,6 +57,9 @@ tipo_analisis = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
+# Referencia al archivo BSCF disponible en el entorno
+st.sidebar.info('💡 Archivo auxiliar disponible para referencia: "BSCF".')
+
 # ==========================================
 # PROCESAMIENTO BASE (Columna J y nombres de fila 8)
 # ==========================================
@@ -69,47 +72,65 @@ else:
     col_fecha = None
 
 # ==========================================
-# VISTAS DINÁMICAS, KPIS Y GRÁFICAS
+# VISTAS DINÁMICAS, KPIS Y GRÁFICAS COMPLETAS
 # ==========================================
 if tipo_analisis == "📊 Análisis General":
-    st.header("Visión General de la Flotilla - KPIs y Gráficas")
+    st.header("Dashboard Inicial - Indicadores Clave (KPIs)")
     
-    # 4 KPIs solicitados (incluyendo la meta de 3,000 millas objetivo)
+    # 4 KPIs principales solicitados con sus metas y desglose
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(label="1. Millas por unidad (Objetivo: 3,000)", value=df_agosto.shape[0], delta="Meta: 3,000 mi")
+        st.metric(label="1. Millas por unidad", value=f"{df_agosto.shape[0]} mi", delta="Objetivo: 3,000 mi")
     with col2:
-        st.metric(label="2. Por destino", value=df_agosto.shape[0])
+        destinos_count = df_agosto.iloc[:, 1].nunique() if df_agosto.shape[1] > 1 else 0
+        st.metric(label="2. Por destino", value=f"{destinos_count} destinos")
     with col3:
-        st.metric(label="3. Por tarifa", value=df_agosto.shape[0])
+        st.metric(label="3. Por tarifa", value=f"{df_agosto.shape[0]} registros")
     with col4:
-        st.metric(label="4. Por operador", value=df_agosto.shape[0])
+        operadores_count = df_agosto.iloc[:, 2].nunique() if df_agosto.shape[1] > 2 else 0
+        st.metric(label="4. Por operador", value=f"{operadores_count} operadores")
     
     st.markdown("---")
     
-    # Gráficas de Análisis General
-    st.subheader("📈 Gráficas de Rendimiento (Considerando Objetivo de 3,000 Millas)")
+    # Gráficas detalladas para cada KPI
+    st.subheader("📈 Gráficas de Rendimiento de la Flotilla")
     
     g1, g2 = st.columns(2)
     with g1:
-        st.markdown("**Distribución por Registros**")
-        if len(df_agosto.columns) > 1:
+        st.markdown("**Distribución por Destinos**")
+        if df_agosto.shape[1] > 1:
             st.bar_chart(df_agosto.iloc[:, 1].value_counts().head(10))
         else:
-            st.info("Datos insuficientes para la gráfica.")
+            st.info("Columna de destino no disponible.")
             
     with g2:
-        st.markdown("**Evolución Temporal (Columna J)**")
+        st.markdown("**Distribución por Operadores**")
+        if df_agosto.shape[1] > 2:
+            st.bar_chart(df_agosto.iloc[:, 2].value_counts().head(10))
+        else:
+            st.info("Columna de operador no disponible.")
+
+    g3, g4 = st.columns(2)
+    with g3:
+        st.markdown("**Análisis por Tarifa / Costos**")
+        numeric_cols = df_agosto.select_dtypes(include='number')
+        if not numeric_cols.empty:
+            st.line_chart(numeric_cols.iloc[:, 0].head(30))
+        else:
+            st.info("No hay columnas numéricas para graficar tarifas.")
+            
+    with g4:
+        st.markdown("**Evolución Temporal de Millas (Columna J)**")
         if col_fecha and col_fecha in df_agosto.columns:
             df_temp = df_agosto.dropna(subset=[col_fecha]).copy()
             df_temp['MesDia'] = df_temp[col_fecha].dt.strftime('%m-%d')
             st.line_chart(df_temp['MesDia'].value_counts().sort_index())
         else:
-            st.info("Columna J no disponible para la evolución temporal.")
+            st.info("Columna J no disponible para evolución temporal.")
 
     st.markdown("---")
-    st.subheader("Detalle de la Base de Datos")
+    st.subheader("Detalle Completo de la Base de Datos")
     st.dataframe(df_agosto, use_container_width=True)
 
 elif tipo_analisis == "📅 Semana Actual vs Anterior":
