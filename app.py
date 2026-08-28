@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con evaluación de rangos de St. Miles.")
+st.markdown("Vista general consolidada con evaluación de rangos de St. Miles (Columna Q).")
 st.markdown("---")
 
 # ==========================================
@@ -48,7 +48,7 @@ if df_raw is None or df_raw.empty:
 # ==========================================
 df_raw.columns = df_raw.columns.astype(str).str.strip()
 
-# Manejo seguro de fechas (Columna J / índice 9 o columnas estándar)
+# Manejo seguro de fechas (Columna J / índice 9)
 date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
 if date_col in df_raw.columns:
     df_raw[date_col] = pd.to_datetime(df_raw[date_col], errors="coerce")
@@ -68,17 +68,15 @@ if "Orig-Dest" in df_raw.columns:
 elif "Destino" not in df_raw.columns:
     df_raw["Destino"] = "Desconocido"
 
-# Columna St. Miles para evaluación de objetivos
-if "St. Miles" in df_raw.columns:
+# Columna St. Miles: Tomamos exactamente la columna Q (índice 16) o buscamos por nombre
+if len(df_raw.columns) > 16:
+    col_st_miles = df_raw.columns[16]
+    df_raw["St.Miles"] = pd.to_numeric(df_raw[col_st_miles], errors="coerce").fillna(0)
+elif "St. Miles" in df_raw.columns:
     df_raw["St.Miles"] = pd.to_numeric(df_raw["St. Miles"], errors="coerce").fillna(0)
-elif "L.Miles" in df_raw.columns:
-    df_raw["St.Miles"] = pd.to_numeric(df_raw["L.Miles"], errors="coerce").fillna(0)
 else:
     mile_cols = [c for c in df_raw.columns if "mile" in c.lower()]
-    if mile_cols:
-        df_raw["St.Miles"] = pd.to_numeric(df_raw[mile_cols[0]], errors="coerce").fillna(0)
-    else:
-        df_raw["St.Miles"] = 0
+    df_raw["St.Miles"] = pd.to_numeric(df_raw[mile_cols[0]], errors="coerce").fillna(0) if mile_cols else 0
 
 # Totales (Tarifa)
 total_col = "Total" if "Total" in df_raw.columns else df_raw.columns[4] if len(df_raw.columns) > 4 else None
@@ -87,16 +85,20 @@ if total_col and total_col in df_raw.columns:
 else:
     df_raw["Total"] = 0
 
-# Operador y Unidad
+# Operador y Unidad real (buscando columna de unidad o camión si existe, de lo contrario Load# completo)
+if "Unit" in df_raw.columns:
+    df_raw["Unidad"] = df_raw["Unit"].astype(str)
+elif "Truck" in df_raw.columns:
+    df_raw["Unidad"] = df_raw["Truck"].astype(str)
+elif "Load#" in df_raw.columns:
+    df_raw["Unidad"] = "Load-" + df_raw["Load#"].astype(str)
+else:
+    df_raw["Unidad"] = "Eco-General"
+
 if "Created By" in df_raw.columns:
     df_raw["Operador"] = df_raw["Created By"]
 elif "Operador" not in df_raw.columns:
     df_raw["Operador"] = "Sin Asignar"
-
-if "Load#" in df_raw.columns:
-    df_raw["Unidad"] = "Eco-" + ((pd.to_numeric(df_raw["Load#"], errors="coerce").fillna(0) % 10) + 1).astype(str).str.zfill(3)
-else:
-    df_raw["Unidad"] = "Eco-001"
 
 # ==========================================
 # 3. BARRA LATERAL (SIDEBAR Y LOGOTIPO)
@@ -116,7 +118,7 @@ modo_analisis = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filtros Globales")
 
-unidades_sel = st.sidebar.multiselect("Unidad (Eco)", options=df_raw["Unidad"].unique(), default=df_raw["Unidad"].unique())
+unidades_sel = st.sidebar.multiselect("Unidad", options=df_raw["Unidad"].unique(), default=df_raw["Unidad"].unique())
 operadores_sel = st.sidebar.multiselect("Operador / Creador", options=df_raw["Operador"].unique(), default=df_raw["Operador"].unique())
 
 df_filtered = df_raw[
@@ -130,20 +132,20 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # Preparamos los datos agrupados por Unidad y su categoría Target exacta
+    # Preparamos los datos agrupados por Unidad y su categoría Target exacta con los rangos solicitados
     df_unidades = df_filtered.groupby("Unidad")["St.Miles"].sum().reset_index()
     df_unidades.columns = ["Unidad", "Millas"]
     
     def clasificar_target(millas):
         if millas > 3000:
             return "UNIDADES 3,000 + MILLAS"
-        elif millas > 2500:
+        elif millas > 2500: # <= 3000 y > 2500
             return "UNIDADES 2,500 - 3,000 MILLAS"
-        elif millas > 2000:
+        elif millas > 2000: # <= 2500 y > 2000
             return "UNIDADES 2,000-2,500 MILLAS"
-        elif millas > 1500:
+        elif millas > 1500: # <= 2000 y > 1500
             return "UNIDADES 1,500 - 2,000 MILLAS"
-        else:
+        else: # <= 1500
             return "UNIDADES BAJO 1,500 MILLAS"
 
     df_unidades["Rango Target"] = df_unidades["Millas"].apply(clasificar_target)
@@ -167,7 +169,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
     fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [total_unidades]})
     df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
 
-    # 3 KPIs Restantes + La Tabla/Resumen de Unidades en la parte superior
+    # 4 KPIs Superiores
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
     col2.metric("2. Viajes Totales", f"{len(df_filtered):,}")
@@ -203,7 +205,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
     c1, c2 = st.columns(2)
     
     with c1:
-        st.subheader("1. 🛣️ Detalle de Millas por Unidad (St. Miles)")
+        st.subheader("1. 🛣️ Detalle de Millas por Unidad (Columna Q - St. Miles)")
         fig_u = px.bar(df_unidades, x="Unidad", y="Millas", text_auto='.2s', color="Millas", color_continuous_scale="Blues")
         fig_u.add_hline(y=OBJETIVO_MILLAS_SEMANAL, line_dash="dash", line_color="red", annotation_text=f"Meta: {OBJETIVO_MILLAS_SEMANAL} mi", annotation_position="bottom right")
         st.plotly_chart(fig_u, use_container_width=True)
@@ -222,7 +224,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
         st.subheader("4. 👤 Rendimiento por Operador / Creador")
         df_ops = df_filtered.groupby("Operador")[["St.Miles", "Total"]].mean().reset_index()
         fig_o = px.bar(df_ops, x="Operador", y="St.Miles", color="Total", text_auto='.2s', color_continuous_scale="Viridis")
-        fig_o.update_layout(yaxis_title="Promedio de Millas (St. Miles)")
+        fig_o.update_layout(yaxis_title="Promedio de St. Miles")
         st.plotly_chart(fig_o, use_container_width=True)
 
     st.markdown("---")
