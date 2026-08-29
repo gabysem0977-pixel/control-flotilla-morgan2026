@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con evaluación de rangos de St. Miles (Columna Q).")
+st.markdown("Vista general consolidada con evaluación de rangos de St. Miles (Columna Q) por registro.")
 st.markdown("---")
 
 # ==========================================
@@ -137,10 +137,7 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # 🎯 CÁLCULO DE LA TABLA TARGET CON TODA LA FLOTILLA GLOBAL (df_raw)
-    df_unidades_global = df_raw.groupby("Unidad")["St.Miles"].sum().reset_index()
-    df_unidades_global.columns = ["Unidad", "Millas"]
-    
+    # 🎯 CÁLCULO DE LA TABLA TARGET EVALUANDO CADA REGISTRO (St. Miles) DE LA FLOTILLA GLOBAL (df_raw)
     def clasificar_target(millas):
         if millas > 3000:
             return "UNIDADES 3,000 + MILLAS"
@@ -153,9 +150,9 @@ if modo_analisis == "General (Gerencia / Dirección)":
         else:
             return "UNIDADES BAJO 1,500 MILLAS"
 
-    df_unidades_global["Rango Target"] = df_unidades_global["Millas"].apply(clasificar_target)
+    df_raw["Rango Target"] = df_raw["St.Miles"].apply(clasificar_target)
     
-    conteo_targets = df_unidades_global["Rango Target"].value_counts().reset_index()
+    conteo_targets = df_raw["Rango Target"].value_counts().reset_index()
     conteo_targets.columns = ["Categoría Target", "Cantidad de Unidades"]
     
     categorias_orden = [
@@ -184,12 +181,12 @@ if modo_analisis == "General (Gerencia / Dirección)":
     st.markdown("---")
     
     # Sección dedicada al Target de Unidades Millas (Tabla + Gráfico)
-    st.subheader("🎯 Target de Unidades Millas (Evaluación por Categoría)")
+    st.subheader("🎯 Target de Unidades Millas (Evaluación por Registro de St. Miles)")
     
     tc1, tc2 = st.columns([1, 1.5])
     
     with tc1:
-        st.markdown("**Tabla de Unidades por Rango**")
+        st.markdown("**Tabla de Registros por Rango**")
         st.dataframe(df_target_table.set_index("Categoría Target"), use_container_width=True)
         
     with tc2:
@@ -202,7 +199,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
             color="Categoría Target",
             color_discrete_sequence=px.colors.sequential.Blues_r
         )
-        fig_target.update_layout(xaxis_title="", yaxis_title="No. de Unidades", showlegend=False)
+        fig_target.update_layout(xaxis_title="", yaxis_title="No. de Registros", showlegend=False)
         st.plotly_chart(fig_target, use_container_width=True)
 
     st.markdown("---")
