@@ -89,13 +89,12 @@ if total_col and total_col in df_raw.columns:
 else:
     df_raw["Total"] = 0
 
-# Operador y Unidad real
-if "Unit" in df_raw.columns:
-    df_raw["Unidad"] = df_raw["Unit"].astype(str)
-elif "Truck" in df_raw.columns:
-    df_raw["Unidad"] = df_raw["Truck"].astype(str)
-elif "Load#" in df_raw.columns:
-    df_raw["Unidad"] = "Load-" + df_raw["Load#"].astype(str)
+# Unidad basada en la Columna B (Settl.#, índice 1)
+if len(df_raw.columns) > 1:
+    col_settle = df_raw.columns[1]
+    df_raw["Unidad"] = df_raw[col_settle].astype(str)
+elif "Settl.#" in df_raw.columns:
+    df_raw["Unidad"] = df_raw["Settl.#"].astype(str)
 else:
     df_raw["Unidad"] = "Eco-General"
 
