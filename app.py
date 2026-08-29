@@ -89,14 +89,16 @@ if total_col and total_col in df_raw.columns:
 else:
     df_raw["Total"] = 0
 
-# Unidad basada en la Columna B (Settl.#, índice 1)
+# Unidad basada en la Columna B (Settl.#, índice 1) agrupando los vacíos como "Vacía"
 if len(df_raw.columns) > 1:
     col_settle = df_raw.columns[1]
-    df_raw["Unidad"] = df_raw[col_settle].astype(str)
+    df_raw["Unidad"] = df_raw[col_settle].fillna("Vacía").astype(str).str.strip()
+    df_raw.loc[(df_raw["Unidad"] == "") | (df_raw["Unidad"].str.lower() == "nan"), "Unidad"] = "Vacía"
 elif "Settl.#" in df_raw.columns:
-    df_raw["Unidad"] = df_raw["Settl.#"].astype(str)
+    df_raw["Unidad"] = df_raw["Settl.#"].fillna("Vacía").astype(str).str.strip()
+    df_raw.loc[(df_raw["Unidad"] == "") | (df_raw["Unidad"].str.lower() == "nan"), "Unidad"] = "Vacía"
 else:
-    df_raw["Unidad"] = "Eco-General"
+    df_raw["Unidad"] = "Vacía"
 
 if "Created By" in df_raw.columns:
     df_raw["Operador"] = df_raw["Created By"]
