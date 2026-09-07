@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con evaluación de rangos de St. Miles (Columna Q).")
+st.markdown("Vista general consolidada con evaluación de rangos de St. Miles y métricas operativas.")
 st.markdown("---")
 
 # ==========================================
@@ -29,7 +29,6 @@ url_excel_agosto = "https://docs.google.com/spreadsheets/d/1d2iBvDFT03GvtsLtLOxk
 @st.cache_data(ttl=600)
 def load_data(url):
     try:
-        # Fila 8 como cabecera (header=7)
         data = conn.read(spreadsheet=url, header=7)
         return data
     except Exception as e:
@@ -48,11 +47,9 @@ if df_raw is None or df_raw.empty:
 # ==========================================
 df_raw.columns = df_raw.columns.astype(str).str.strip()
 
-# Omitimos la última fila si contiene el total general de la hoja original de Excel
 if len(df_raw) > 0:
     df_raw = df_raw.iloc[:-1].copy()
 
-# Manejo seguro de fechas (Columna J / índice 9)
 date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
 if date_col in df_raw.columns:
     df_raw[date_col] = pd.to_datetime(df_raw[date_col], errors="coerce")
@@ -64,7 +61,6 @@ df_raw["Dia"] = df_raw["Pickup"].dt.date
 df_raw["Anio"] = df_raw["Pickup"].dt.isocalendar().year
 df_raw["SemanaNum"] = df_raw["Pickup"].dt.isocalendar().week
 
-# Destinos
 if "Orig-Dest" in df_raw.columns:
     splitted = df_raw["Orig-Dest"].str.split(" - ", n=1, expand=True)
     df_raw["Origen"] = splitted[0].str.strip()
@@ -72,7 +68,6 @@ if "Orig-Dest" in df_raw.columns:
 elif "Destino" not in df_raw.columns:
     df_raw["Destino"] = "Desconocido"
 
-# Columna St. Miles: Tomamos exactamente la columna Q (índice 16) o buscamos por nombre
 if len(df_raw.columns) > 16:
     col_st_miles = df_raw.columns[16]
     df_raw["St.Miles"] = pd.to_numeric(df_raw[col_st_miles], errors="coerce").fillna(0)
@@ -82,14 +77,12 @@ else:
     mile_cols = [c for c in df_raw.columns if "mile" in c.lower()]
     df_raw["St.Miles"] = pd.to_numeric(df_raw[mile_cols[0]], errors="coerce").fillna(0) if mile_cols else 0
 
-# Totales (Tarifa)
 total_col = "Total" if "Total" in df_raw.columns else df_raw.columns[4] if len(df_raw.columns) > 4 else None
 if total_col and total_col in df_raw.columns:
     df_raw["Total"] = pd.to_numeric(df_raw[total_col], errors="coerce").fillna(0)
 else:
     df_raw["Total"] = 0
 
-# Unidad basada en la Columna B (Settl.#, índice 1) agrupando los vacíos como "Vacía"
 if len(df_raw.columns) > 1:
     col_settle = df_raw.columns[1]
     df_raw["Unidad"] = df_raw[col_settle].fillna("Vacía").astype(str).str.strip()
@@ -137,7 +130,7 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # 🎯 CÁLCULO DE LA TABLA TARGET CON TODA LA FLOTILLA GLOBAL (df_raw)
+    # 🎯 CÁLCULO DE LA TABLA TARGET POR UNIDAD
     df_unidades_global = df_raw.groupby("Unidad")["St.Miles"].sum().reset_index()
     df_unidades_global.columns = ["Unidad", "Millas"]
     
@@ -174,10 +167,10 @@ if modo_analisis == "General (Gerencia / Dirección)":
     fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [total_unidades]})
     df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
 
-    # 4 KPIs Superiores
+    # 4 KPIs Superiores incluyendo Cargas Operativas (Loads)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
-    col2.metric("2. Viajes Totales", f"{len(df_filtered):,}")
+    col2.metric("2. Total Loads", f"{len(df_filtered):,}")
     col3.metric("3. Flotilla Activa", f"{df_filtered['Unidad'].nunique()} unidades")
     col4.metric("4. Total St. Miles", f"{df_filtered['St.Miles'].sum():,.1f} mi")
     
