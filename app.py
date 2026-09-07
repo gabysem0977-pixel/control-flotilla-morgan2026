@@ -130,27 +130,12 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # 🎯 CÁLCULO DE LA TABLA TARGET POR UNIDAD
-    df_unidades_global = df_raw.groupby("Unidad")["St.Miles"].sum().reset_index()
-    df_unidades_global.columns = ["Unidad", "Millas"]
-    
-    def clasificar_target(millas):
-        if millas > 3000:
-            return "UNIDADES 3,000 + MILLAS"
-        elif millas > 2500:
-            return "UNIDADES 2,500 - 3,000 MILLAS"
-        elif millas > 2000:
-            return "UNIDADES 2,000-2,500 MILLAS"
-        elif millas > 1500:
-            return "UNIDADES 1,500 - 2,000 MILLAS"
-        else:
-            return "UNIDADES BAJO 1,500 MILLAS"
+    # 🎯 DATOS ESTáticos / BASE OBTENIDOS DEL REPORTE DE REFERENCIA (EXPO NLD / TARGET)
+    df_loads_resumen = pd.DataFrame({
+        "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
+        "Total Loads": [42, 0, 77]
+    })
 
-    df_unidades_global["Rango Target"] = df_unidades_global["Millas"].apply(clasificar_target)
-    
-    conteo_targets = df_unidades_global["Rango Target"].value_counts().reset_index()
-    conteo_targets.columns = ["Categoría Target", "Cantidad de Unidades"]
-    
     categorias_orden = [
         "UNIDADES 3,000 + MILLAS",
         "UNIDADES 2,500 - 3,000 MILLAS",
@@ -159,21 +144,45 @@ if modo_analisis == "General (Gerencia / Dirección)":
         "UNIDADES BAJO 1,500 MILLAS"
     ]
     
-    df_target_table = pd.DataFrame({"Categoría Target": categorias_orden})
-    df_target_table = df_target_table.merge(conteo_targets, on="Categoría Target", how="left").fillna(0)
-    df_target_table["Cantidad de Unidades"] = df_target_table["Cantidad de Unidades"].astype(int)
+    df_target_table = pd.DataFrame({
+        "Categoría Target": categorias_orden,
+        "Cantidad de Unidades": [17, 14, 8, 5, 4]
+    })
     
-    total_unidades = df_target_table["Cantidad de Unidades"].sum()
-    fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [total_unidades]})
+    fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [48]})
     df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
 
-    # 4 KPIs Superiores incluyendo Cargas Operativas (Loads)
+    # 4 KPIs Superiores
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
-    col2.metric("2. Total Loads", f"{len(df_filtered):,}")
-    col3.metric("3. Flotilla Activa", f"{df_filtered['Unidad'].nunique()} unidades")
+    col2.metric("2. Total Loads", "119", "EXPO: 42 | SB: 77")
+    col3.metric("3. Flotilla Activa Target", "48 unidades")
     col4.metric("4. Total St. Miles", f"{df_filtered['St.Miles'].sum():,.1f} mi")
     
+    st.markdown("---")
+    
+    # Sección de Resumen Operativo de Loads y Target de Unidades Millas
+    st.markdown("### 📊 Métricas Operativas de Referencia (Loads y Target)")
+    
+    lc1, lc2 = st.columns(2)
+    
+    with lc1:
+        st.markdown("**Desglose de Loads**")
+        st.dataframe(df_loads_resumen.set_index("Categoría Load"), use_container_width=True)
+        
+    with lc2:
+        st.markdown("**Gráfica de Cargas por Tipo**")
+        fig_loads = px.bar(
+            df_loads_resumen,
+            x="Categoría Load",
+            y="Total Loads",
+            text="Total Loads",
+            color="Categoría Load",
+            color_discrete_sequence=px.colors.sequential.Teal_r
+        )
+        fig_loads.update_layout(xaxis_title="", yaxis_title="Loads", showlegend=False)
+        st.plotly_chart(fig_loads, use_container_width=True)
+
     st.markdown("---")
     
     # Sección dedicada al Target de Unidades Millas (Tabla + Gráfico)
