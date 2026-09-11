@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con evaluación de rangos de St. Miles y métricas operativas.")
+st.markdown("Vista general consolidada con evaluación de rangos de St. Miles y respaldo histórico automático.")
 st.markdown("---")
 
 # ==========================================
@@ -60,6 +60,7 @@ else:
 df_raw["Dia"] = df_raw["Pickup"].dt.date
 df_raw["Anio"] = df_raw["Pickup"].dt.isocalendar().year
 df_raw["SemanaNum"] = df_raw["Pickup"].dt.isocalendar().week
+df_raw["MesNum"] = df_raw["Pickup"].dt.month
 
 if "Orig-Dest" in df_raw.columns:
     splitted = df_raw["Orig-Dest"].str.split(" - ", n=1, expand=True)
@@ -110,7 +111,7 @@ st.sidebar.header("🎛️ Panel de Control")
 
 modo_analisis = st.sidebar.radio(
     "Selecciona el tipo de vista:",
-    ["General (Gerencia / Dirección)", "Semana Actual vs. Anterior", "Periodos Definidos"]
+    ["General (Gerencia / Dirección)", "Semana Actual vs. Anterior", "Mes vs. Mes (Histórico)", "Periodos Definidos"]
 )
 
 st.sidebar.markdown("---")
@@ -130,7 +131,6 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # 🎯 DATOS ESTáticos / BASE OBTENIDOS DEL REPORTE DE REFERENCIA (EXPO NLD / TARGET)
     df_loads_resumen = pd.DataFrame({
         "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
         "Total Loads": [42, 0, 77]
@@ -152,6 +152,21 @@ if modo_analisis == "General (Gerencia / Dirección)":
     fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [48]})
     df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
 
+    # Botón para respaldar snapshot en la pestaña "Historial_Respaldo" de Google Sheets
+    if st.sidebar.button("💾 Guardar Respaldo Histórico (Snapshot)"):
+        try:
+            snapshot_data = pd.DataFrame({
+                "Fecha_Respaldo": [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "Total_Loads": [len(df_filtered)],
+                "Millas_Totales": [df_filtered["St.Miles"].sum()],
+                "Tarifa_Promedio": [df_filtered["Total"].mean()]
+            })
+            # Intentar escribir en la pestaña de respaldo de Google Sheets
+            conn.update(worksheet="Historial_Respaldo", data=snapshot_data)
+            st.sidebar.success("¡Respaldo guardado exitosamente en Google Sheets!")
+        except Exception as e:
+            st.sidebar.warning(f"Nota de respaldo: {e}. (Asegúrate de crear la pestaña 'Historial_Respaldo' en tu Google Sheet si deseas persistencia automática).")
+
     # 4 KPIs Superiores
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
@@ -161,7 +176,6 @@ if modo_analisis == "General (Gerencia / Dirección)":
     
     st.markdown("---")
     
-    # Sección de Resumen Operativo de Loads y Target de Unidades Millas
     st.markdown("### 📊 Métricas Operativas de Referencia (Loads y Target)")
     
     lc1, lc2 = st.columns(2)
@@ -185,7 +199,6 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
     st.markdown("---")
     
-    # Sección dedicada al Target de Unidades Millas (Tabla + Gráfico)
     st.subheader("🎯 Target de Unidades Millas (Evaluación por Categoría)")
     
     tc1, tc2 = st.columns([1, 1.5])
@@ -278,6 +291,35 @@ elif modo_analisis == "Semana Actual vs. Anterior":
         st.warning("Solo se detectó una semana de datos en los reportes cargados. Se necesitan al menos dos semanas para la comparativa.")
     else:
         st.warning("No hay semanas válidas en los reportes cargados.")
+
+elif modo_analisis == "Mes vs. Mes (Histórico)":
+    st.title("📈 Análisis Histórico: Mes vs. Mes")
+    
+    meses_unicos = sorted(df_filtered["MesNum"].dropna().unique())
+    
+    if len(meses_unicos) >= 2:
+        mes_actual = meses_unicos[-1]
+        mes_anterior = meses_unicos[-2]
+        
+        df_mes_act = df_filtered[df_filtered["MesNum"] == mes_actual]
+        df_mes_ant = df_filtered[df_filtered["MesNum"] == mes_anterior]
+        
+        millas_m_act = df_mes_act["St.Miles"].sum()
+        millas_m_ant = df_mes_ant["St.Miles"].sum()
+        delta_millas_m = ((millas_m_act - millas_m_ant) / (millas_m_ant if millas_m_ant > 0 else 1)) * 100
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Millas Mes Actual ({mes_actual})", f"{millas_m_act:,.1f} mi", f"{delta_millas_m:+.1f}% vs mes ant.")
+        c2.metric(f"Cargas Mes Actual", f"{len(df_mes_act)}", f"{len(df_mes_act) - len(df_mes_ant)} vs mes ant.")
+        c3.metric(f"Flotilla Activa Mes", f"{df_mes_act['Unidad'].nunique()} un.")
+        
+        st.markdown("---")
+        st.subheader("Evolución de Millas Agrupadas por Mes")
+        df_mensual = df_filtered.groupby("MesNum")["St.Miles"].sum().reset_index()
+        fig_mes = px.bar(df_mensual, x="MesNum", y="St.Miles", text_auto='.2s', color="St.Miles", color_continuous_scale="Purples")
+        st.plotly_chart(fig_mes, use_container_width=True)
+    else:
+        st.warning("Se requieren datos de al menos dos meses diferentes en los registros para realizar la comparativa mes a mes.")
 
 elif modo_analisis == "Periodos Definidos":
     st.title("📅 Análisis por Periodos Definidos y Seguimiento de Meta")
