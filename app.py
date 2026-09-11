@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con evaluación de rangos de St. Miles y respaldo histórico automático.")
+st.markdown("Vista general consolidada con comparativa semanal de métricas operativas y target de unidades.")
 st.markdown("---")
 
 # ==========================================
@@ -111,7 +111,7 @@ st.sidebar.header("🎛️ Panel de Control")
 
 modo_analisis = st.sidebar.radio(
     "Selecciona el tipo de vista:",
-    ["General (Gerencia / Dirección)", "Semana Actual vs. Anterior", "Mes vs. Mes (Histórico)", "Periodos Definidos"]
+    ["General (Gerencia / Dirección)", "Semana Actual vs. Anterior (Comparativo)", "Mes vs. Mes (Histórico)", "Periodos Definidos"]
 )
 
 st.sidebar.markdown("---")
@@ -131,9 +131,10 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
+    # Datos de la semana más reciente (Imagen nueva)
     df_loads_resumen = pd.DataFrame({
         "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
-        "Total Loads": [42, 0, 77]
+        "Total Loads": [45, 0, 75]
     })
 
     categorias_orden = [
@@ -146,37 +147,22 @@ if modo_analisis == "General (Gerencia / Dirección)":
     
     df_target_table = pd.DataFrame({
         "Categoría Target": categorias_orden,
-        "Cantidad de Unidades": [17, 14, 8, 5, 4]
+        "Cantidad de Unidades": [22, 12, 7, 3, 4]
     })
     
     fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [48]})
     df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
 
-    # Botón para respaldar snapshot en la pestaña "Historial_Respaldo" de Google Sheets
-    if st.sidebar.button("💾 Guardar Respaldo Histórico (Snapshot)"):
-        try:
-            snapshot_data = pd.DataFrame({
-                "Fecha_Respaldo": [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                "Total_Loads": [len(df_filtered)],
-                "Millas_Totales": [df_filtered["St.Miles"].sum()],
-                "Tarifa_Promedio": [df_filtered["Total"].mean()]
-            })
-            # Intentar escribir en la pestaña de respaldo de Google Sheets
-            conn.update(worksheet="Historial_Respaldo", data=snapshot_data)
-            st.sidebar.success("¡Respaldo guardado exitosamente en Google Sheets!")
-        except Exception as e:
-            st.sidebar.warning(f"Nota de respaldo: {e}. (Asegúrate de crear la pestaña 'Historial_Respaldo' en tu Google Sheet si deseas persistencia automática).")
-
     # 4 KPIs Superiores
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
-    col2.metric("2. Total Loads", "119", "EXPO: 42 | SB: 77")
+    col2.metric("2. Total Loads", "120", "EXPO: 45 | SB: 75 (+1 vs sem. ant)")
     col3.metric("3. Flotilla Activa Target", "48 unidades")
     col4.metric("4. Total St. Miles", f"{df_filtered['St.Miles'].sum():,.1f} mi")
     
     st.markdown("---")
     
-    st.markdown("### 📊 Métricas Operativas de Referencia (Loads y Target)")
+    st.markdown("### 📊 Métricas Operativas (Semana Actual)")
     
     lc1, lc2 = st.columns(2)
     
@@ -199,7 +185,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
     st.markdown("---")
     
-    st.subheader("🎯 Target de Unidades Millas (Evaluación por Categoría)")
+    st.subheader("🎯 Target de Unidades Millas (Semana Actual)")
     
     tc1, tc2 = st.columns([1, 1.5])
     
@@ -254,43 +240,65 @@ if modo_analisis == "General (Gerencia / Dirección)":
     st.subheader("📋 Detalle Completo de Registros")
     st.dataframe(df_filtered, use_container_width=True)
 
-elif modo_analisis == "Semana Actual vs. Anterior":
-    st.title("⏱️ Análisis Comparativo: Semana Actual vs. Semana Anterior")
+elif modo_analisis == "Semana Actual vs. Anterior (Comparativo)":
+    st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
+    st.markdown("Comparativa directa entre el reporte anterior y la nueva semana ingresada.")
     
-    semanas_unicas = sorted(df_filtered["SemanaNum"].dropna().unique())
+    # Construcción de la tabla comparativa basada en las dos imágenes aportadas
+    df_comparativa = pd.DataFrame({
+        "Categoría / Rango": [
+            "EXPO DE NLD", 
+            "NB DE LAREDO", 
+            "VIAJES DE SB", 
+            "TOTAL LOADS", 
+            "UNIDADES 3,000 + MILLAS", 
+            "UNIDADES 2,500 - 3,000 MILLAS", 
+            "UNIDADES 2,000-2,500 MILLAS", 
+            "UNIDADES 1,500 - 2,000 MILLAS", 
+            "UNIDADES BAJO 1,500 MILLAS",
+            "TOTAL UNIDADES TARGET"
+        ],
+        "Semana Anterior": [42, 0, 77, 119, 17, 14, 8, 5, 4, 48],
+        "Semana Actual": [45, 0, 75, 120, 22, 12, 7, 3, 4, 48]
+    })
     
-    if len(semanas_unicas) >= 2:
-        semana_actual = semanas_unicas[-1]
-        semana_anterior = semanas_unicas[-2]
-        
-        st.info(f"Comparando la **Semana {semana_actual}** (Actual) contra la **Semana {semana_anterior}** (Anterior)")
-        
-        df_actual = df_filtered[df_filtered["SemanaNum"] == semana_actual]
-        df_anterior = df_filtered[df_filtered["SemanaNum"] == semana_anterior]
-        
-        millas_act = df_actual["St.Miles"].sum()
-        millas_ant = df_anterior["St.Miles"].sum()
-        delta_millas = ((millas_act - millas_ant) / (millas_ant if millas_ant > 0 else 1)) * 100
-        
-        tarifa_act = df_actual["Total"].mean()
-        tarifa_ant = df_anterior["Total"].mean()
-        delta_tarifa = ((tarifa_act - tarifa_ant) / (tarifa_ant if tarifa_ant > 0 else 1)) * 100
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Millas St. (Semana Actual)", f"{millas_act:,.1f} mi", f"{delta_millas:+.1f}% vs semana ant.")
-        c2.metric("Tarifa Promedio", f"${tarifa_act:,.2f}", f"{delta_tarifa:+.1f}% vs semana ant.")
-        c3.metric("Cargas Registradas", f"{len(df_actual)}", f"{len(df_actual) - len(df_anterior)} vs semana ant.")
+    df_comparativa["Diferencia (Var)"] = df_comparativa["Semana Actual"] - df_comparativa["Semana Anterior"]
+    df_comparativa["% Var"] = ((df_comparativa["Diferencia (Var)"] / df_comparativa["Semana Anterior"].replace(0, 1)) * 100).round(1).astype(str) + "%"
 
-        st.markdown("---")
-        st.subheader(f"Desglose de Cargas - Semana {semana_actual}")
-        if not df_actual.empty:
-            st.dataframe(df_actual, use_container_width=True)
-        else:
-            st.warning("No hay registros exactos para la semana actual seleccionada.")
-    elif len(semanas_unicas) == 1:
-        st.warning("Solo se detectó una semana de datos en los reportes cargados. Se necesitan al menos dos semanas para la comparativa.")
-    else:
-        st.warning("No hay semanas válidas en los reportes cargados.")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Loads (Actual)", "120 loads", "+1 vs sem. ant.")
+    c2.metric("Unidades > 3,000 Millas (Actual)", "22 unidades", "+5 unidades vs sem. ant.")
+    c3.metric("Total Unidades Evaluadas", "48 unidades", "Sin cambios")
+
+    st.markdown("---")
+    st.subheader("📋 Tabla Comparativa Consolidada Semanal")
+    st.dataframe(df_comparativa.set_index("Categoría / Rango"), use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📊 Gráfica Comparativa de Rangos Target (Semana Ant. vs Act.)")
+    
+    df_melted = df_comparativa.iloc[4:9].melt(id_vars="Categoría / Rango", value_vars=["Semana Anterior", "Semana Actual"], var_name="Semana", value_name="Unidades")
+    
+    fig_comp = px.bar(
+        df_melted, 
+        x="Categoría / Rango", 
+        y="Unidades", 
+        color="Semana", 
+        barmode="group",
+        color_discrete_sequence=["#6c757d", "#0d6efd"]
+    )
+    fig_comp.update_layout(xaxis_title="", yaxis_title="Cantidad de Unidades")
+    st.plotly_chart(fig_comp, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
+    st.info("""
+    - **314:** Se bajó operador por licencia y salió otro operador el fin de semana de viaje.
+    - **318:** Camión descompuesto en MO.
+    - **512:** Estuvo descompuesto en AL.
+    - **603:** Regresó operador descanso viernes.
+    - **610:** Salió operador a viaje domingo.
+    """)
 
 elif modo_analisis == "Mes vs. Mes (Histórico)":
     st.title("📈 Análisis Histórico: Mes vs. Mes")
