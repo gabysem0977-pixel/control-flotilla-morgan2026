@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con comparativa histórica de las últimas 3 semanas.")
+st.markdown("Vista general consolidada con comparativa directa entre la Semana Anterior y la Semana Actual.")
 st.markdown("---")
 
 # ==========================================
@@ -43,7 +43,7 @@ if df_raw is None or df_raw.empty:
     st.stop()
 
 # ==========================================
-# 2. PROCESAMIENTO Y FILTRADO EXCLUSIVO (3 SEMANAS)
+# 2. PROCESAMIENTO Y FILTRADO EXCLUSIVO (2 SEMANAS: ANTERIOR VS ACTUAL)
 # ==========================================
 df_raw.columns = df_raw.columns.astype(str).str.strip()
 
@@ -61,11 +61,11 @@ df_raw["Dia"] = df_raw["Pickup"].dt.date
 df_raw["Anio"] = df_raw["Pickup"].dt.isocalendar().year
 df_raw["SemanaNum"] = df_raw["Pickup"].dt.isocalendar().week
 
-# FILTRO DE SEGURIDAD: Conservar únicamente las últimas 3 semanas activas en los reportes
+# FILTRO DE SEGURIDAD: Conservar únicamente las últimas 2 semanas para la comparativa directa actual vs anterior
 if not df_raw["SemanaNum"].dropna().empty:
     semanas_disponibles = sorted(df_raw["SemanaNum"].dropna().unique())
-    ultimas_tres_semanas = semanas_disponibles[-3:]
-    df_raw = df_raw[df_raw["SemanaNum"].isin(ultimas_tres_semanas)]
+    ultimas_dos_semanas = semanas_disponibles[-2:]
+    df_raw = df_raw[df_raw["SemanaNum"].isin(ultimas_dos_semanas)]
 
 if "Orig-Dest" in df_raw.columns:
     splitted = df_raw["Orig-Dest"].str.split(" - ", n=1, expand=True)
@@ -116,7 +116,7 @@ st.sidebar.header("🎛️ Panel de Control")
 
 modo_analisis = st.sidebar.radio(
     "Selecciona el tipo de vista:",
-    ["General (Gerencia / Dirección)", "Comparativo de 3 Semanas", "Periodos Definidos"]
+    ["General (Gerencia / Dirección)", "Semana Anterior vs. Actual (Comparativo)", "Periodos Definidos"]
 )
 
 st.sidebar.markdown("---")
@@ -136,7 +136,7 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # Datos de la última semana (Semana 3)
+    # Datos de la semana actual (Semana 3)
     df_loads_resumen = pd.DataFrame({
         "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
         "Total Loads": [47, 0, 74]
@@ -244,11 +244,11 @@ if modo_analisis == "General (Gerencia / Dirección)":
     st.subheader("📋 Detalle Completo de Registros")
     st.dataframe(df_filtered, use_container_width=True)
 
-elif modo_analisis == "Comparativo de 3 Semanas":
-    st.title("⏱️ Análisis Comparativo: Historial de las Últimas 3 Semanas")
-    st.markdown("Comparativa directa y consolidada de los tres reportes semanales compartidos.")
+elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
+    st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
+    st.markdown("Comparativa directa y consolidada entre la semana previa y la semana actual.")
     
-    df_comparativa_3w = pd.DataFrame({
+    df_comparativa_2w = pd.DataFrame({
         "Categoría / Rango": [
             "EXPO DE NLD", 
             "NB DE LAREDO", 
@@ -261,40 +261,42 @@ elif modo_analisis == "Comparativo de 3 Semanas":
             "UNIDADES BAJO 1,500 MILLAS",
             "TOTAL UNIDADES TARGET"
         ],
-        "Semana 1": [42, 0, 77, 119, 17, 14, 8, 5, 4, 48],
-        "Semana 2": [45, 0, 75, 120, 22, 12, 7, 3, 4, 48],
-        "Semana 3 (Actual)": [47, 0, 74, 121, 13, 20, 8, 3, 5, 49]
+        "Semana Anterior (Previa)": [45, 0, 75, 120, 22, 12, 7, 3, 4, 48],
+        "Semana Actual": [47, 0, 74, 121, 13, 20, 8, 3, 5, 49]
     })
+    
+    df_comparativa_2w["Diferencia (Var)"] = df_comparativa_2w["Semana Actual"] - df_comparativa_2w["Semana Anterior (Previa)"]
+    df_comparativa_2w["% Var"] = ((df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior (Previa)"].replace(0, 1)) * 100).round(1).astype(str) + "%"
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Loads (Semana 3)", "121 loads", "+1 vs sem. previa")
-    c2.metric("Unidades > 3,000 Millas", "13 unidades", "Semana 3")
-    c3.metric("Total Unidades Evaluadas", "49 unidades", "+1 vs sem. previa")
+    c1.metric("Total Loads (Semana Actual)", "121 loads", "+1 vs sem. anterior")
+    c2.metric("Unidades > 3,000 Millas", "13 unidades", "-9 vs sem. anterior")
+    c3.metric("Total Unidades Evaluadas", "49 unidades", "+1 vs sem. anterior")
 
     st.markdown("---")
-    st.subheader("📋 Tabla Comparativa de 3 Semanas")
-    st.dataframe(df_comparativa_3w.set_index("Categoría / Rango"), use_container_width=True)
+    st.subheader("📋 Tabla Comparativa Consolidada (Semana Anterior vs Actual)")
+    st.dataframe(df_comparativa_2w.set_index("Categoría / Rango"), use_container_width=True)
 
     st.markdown("---")
-    st.subheader("📊 Gráfica Evolutiva de Rangos Target (3 Semanas)")
+    st.subheader("📊 Gráfica Comparativa de Rangos Target (Anterior vs Actual)")
     
-    df_melted_3w = df_comparativa_3w.iloc[4:9].melt(
+    df_melted_2w = df_comparativa_2w.iloc[4:9].melt(
         id_vars="Categoría / Rango", 
-        value_vars=["Semana 1", "Semana 2", "Semana 3 (Actual)"], 
+        value_vars=["Semana Anterior (Previa)", "Semana Actual"], 
         var_name="Semana", 
         value_name="Unidades"
     )
     
-    fig_comp_3w = px.bar(
-        df_melted_3w, 
+    fig_comp_2w = px.bar(
+        df_melted_2w, 
         x="Categoría / Rango", 
         y="Unidades", 
         color="Semana", 
         barmode="group",
-        color_discrete_sequence=["#adb5bd", "#4dabf7", "#1864ab"]
+        color_discrete_sequence=["#adb5bd", "#1864ab"]
     )
-    fig_comp_3w.update_layout(xaxis_title="", yaxis_title="Cantidad de Unidades")
-    st.plotly_chart(fig_comp_3w, use_container_width=True)
+    fig_comp_2w.update_layout(xaxis_title="", yaxis_title="Cantidad de Unidades")
+    st.plotly_chart(fig_comp_2w, use_container_width=True)
 
     st.markdown("---")
     st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
@@ -355,3 +357,4 @@ elif modo_analisis == "Periodos Definidos":
 # ==========================================
 st.markdown("---")
 st.caption("Sistema de Control Privado - Morgan Express © 2026")
+    
