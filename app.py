@@ -61,7 +61,6 @@ df_raw["Dia"] = df_raw["Pickup"].dt.date
 df_raw["Anio"] = df_raw["Pickup"].dt.isocalendar().year
 df_raw["SemanaNum"] = df_raw["Pickup"].dt.isocalendar().week
 
-# FILTRO DE SEGURIDAD: Conservar únicamente las últimas 2 semanas para la comparativa directa actual vs anterior
 if not df_raw["SemanaNum"].dropna().empty:
     semanas_disponibles = sorted(df_raw["SemanaNum"].dropna().unique())
     ultimas_dos_semanas = semanas_disponibles[-2:]
@@ -136,10 +135,9 @@ df_filtered = df_raw[
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
-    # Datos de la semana actual (Semana 3)
     df_loads_resumen = pd.DataFrame({
         "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
-        "Total Loads": [47, 0, 74]
+        "Total Loads": [43, 0, 72]
     })
 
     categorias_orden = [
@@ -152,7 +150,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
     
     df_target_table = pd.DataFrame({
         "Categoría Target": categorias_orden,
-        "Cantidad de Unidades": [13, 20, 8, 3, 5]
+        "Cantidad de Unidades": [23, 15, 2, 1, 8]
     })
     
     fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [49]})
@@ -160,7 +158,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
-    col2.metric("2. Total Loads", "121", "EXPO: 47 | SB: 74")
+    col2.metric("2. Total Loads", "115", "EXPO: 43 | SB: 72")
     col3.metric("3. Flotilla Activa Target", "49 unidades")
     col4.metric("4. Total St. Miles", f"{df_filtered['St.Miles'].sum():,.1f} mi")
     
@@ -246,7 +244,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
-    st.markdown("Comparativa directa y consolidada entre la semana previa y la semana actual.")
+    st.markdown("Comparativa directa y consolidada entre periodos.")
     
     df_comparativa_2w = pd.DataFrame({
         "Categoría / Rango": [
@@ -261,17 +259,17 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
             "UNIDADES BAJO 1,500 MILLAS",
             "TOTAL UNIDADES TARGET"
         ],
-        "Semana Anterior (Previa)": [45, 0, 75, 120, 22, 12, 7, 3, 4, 48],
-        "Semana Actual": [47, 0, 74, 121, 13, 20, 8, 3, 5, 49]
+        "Semana Anterior": [47, 0, 74, 121, 13, 20, 8, 3, 5, 49],
+        "Semana Actual": [43, 0, 72, 115, 23, 15, 2, 1, 8, 49]
     })
     
-    df_comparativa_2w["Diferencia (Var)"] = df_comparativa_2w["Semana Actual"] - df_comparativa_2w["Semana Anterior (Previa)"]
-    df_comparativa_2w["% Var"] = ((df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior (Previa)"].replace(0, 1)) * 100).round(1).astype(str) + "%"
+    df_comparativa_2w["Diferencia (Var)"] = df_comparativa_2w["Semana Actual"] - df_comparativa_2w["Semana Anterior"]
+    df_comparativa_2w["% Var"] = ((df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior"].replace(0, 1)) * 100).round(1).astype(str) + "%"
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Loads (Semana Actual)", "121 loads", "+1 vs sem. anterior")
-    c2.metric("Unidades > 3,000 Millas", "13 unidades", "-9 vs sem. anterior")
-    c3.metric("Total Unidades Evaluadas", "49 unidades", "+1 vs sem. anterior")
+    c1.metric("Total Loads (Semana Actual)", "115 loads", "-6 vs sem. anterior")
+    c2.metric("Unidades > 3,000 Millas", "23 unidades", "+10 vs sem. anterior")
+    c3.metric("Total Unidades Evaluadas", "49 unidades", "Sin cambios")
 
     st.markdown("---")
     st.subheader("📋 Tabla Comparativa Consolidada (Semana Anterior vs Actual)")
@@ -282,7 +280,7 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     
     df_melted_2w = df_comparativa_2w.iloc[4:9].melt(
         id_vars="Categoría / Rango", 
-        value_vars=["Semana Anterior (Previa)", "Semana Actual"], 
+        value_vars=["Semana Anterior", "Semana Actual"], 
         var_name="Semana", 
         value_name="Unidades"
     )
@@ -297,16 +295,6 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     )
     fig_comp_2w.update_layout(xaxis_title="", yaxis_title="Cantidad de Unidades")
     st.plotly_chart(fig_comp_2w, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
-    st.info("""
-    - **613:** Op nuevo salió jueves de viaje.
-    - **318:** Descompuesto no ha llegado a Laredo.
-    - **341:** Descompuesto llegó fin de semana.
-    - **326:** Dejó op y tomó 314; salió de viaje hasta jueves.
-    - **322:** Estuvo detenido por entrega mal en TX y no salió de nuevo de viaje.
-    """)
 
 elif modo_analisis == "Periodos Definidos":
     st.title("📅 Análisis por Periodos Definidos y Seguimiento de Meta")
