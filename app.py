@@ -244,7 +244,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
-    st.markdown("Comparativa directa y consolidada entre la semana previa y la nueva semana ingresada.")
+    st.markdown("Comparativa directa y consolidada.")
     
     df_comparativa_2w = pd.DataFrame({
         "Categoría / Rango": [
@@ -299,7 +299,7 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.markdown("---")
     st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
     st.info("""
-    - **Op de la unidad 331:** Regresó de descanso el jueves[span_3](start_span)[span_3](end_span).
+    - **Op de la unidad 331:** Regresó de descanso el jueves[span_5](start_span)[span_5](end_span).
     - **Op de la unidad 343:** Regresó de descanso el miércoles.
     """)
 
@@ -341,7 +341,7 @@ elif modo_analisis == "Periodos Definidos":
 
         st.markdown("---")
         df_tiempo = df_periodo.groupby("Dia")[["St.Miles"]].sum().reset_index()
-        fig_tiempo = px.line(df_tiempo, x="Dia", y="St.Miles", markers=True, title="Evolución de St. Miles por Día en el Periodo")
+        fig_tiempo = px.line(df_tiempo, x="Dia", y="St.Miles", markers=True, title="Evolución de St. Miles per Día en el Periodo")
         fig_tiempo.update_layout(yaxis_title="Millas Totales")
         st.plotly_chart(fig_tiempo, use_container_width=True)
     else:
@@ -352,4 +352,4 @@ elif modo_analisis == "Periodos Definidos":
 # ==========================================
 st.markdown("---")
 st.caption("Sistema de Control Privado - Morgan Express © 2026")
-            
+        
