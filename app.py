@@ -2,7 +2,6 @@ import datetime
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -17,94 +16,26 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada con comparativa directa entre la Semana Anterior y la Semana Actual.")
+st.markdown("Vista general consolidada con los datos oficiales de la semana actual (BSCF).")
 st.markdown("---")
 
 # ==========================================
-# 1. CONEXIÓN SEGURA A LA NUBE (GOOGLE SHEETS)
+# DATOS OFICIALES DE LA SEMANA ACTUAL (IMAGEN BSCF)
 # ==========================================
-conn = st.connection("gsheets", type=GSheetsConnection)
-url_excel_agosto = "https://docs.google.com/spreadsheets/d/1d2iBvDFT03GvtsLtLOxkEMNK5xiEp06cY-yPG7m8ITE/edit?usp=sharing"
+total_loads_actual = 121
+expo_actual = 45
+nb_actual = 0
+sb_actual = 76
 
-@st.cache_data(ttl=600)
-def load_data(url):
-    try:
-        data = conn.read(spreadsheet=url, header=7)
-        return data
-    except Exception as e:
-        st.error(f"Error al conectar con la base de datos: {e}")
-        return None
-
-with st.spinner("Descargando datos desde la nube..."):
-    df_raw = load_data(url_excel_agosto)
-
-if df_raw is None or df_raw.empty:
-    st.error("⚠️ No se pudieron cargar los datos de Google Sheets. Verifica los permisos de Lector en tu archivo.")
-    st.stop()
+total_unidades_target = 44
+u_3000_plus = 21
+u_2500_3000 = 14
+u_2000_2500 = 6
+u_1500_2000 = 3
+u_bajo_1500 = 0
 
 # ==========================================
-# 2. PROCESAMIENTO Y FILTRADO EXCLUSIVO (2 SEMANAS: ANTERIOR VS ACTUAL)
-# ==========================================
-df_raw.columns = df_raw.columns.astype(str).str.strip()
-
-if len(df_raw) > 0:
-    df_raw = df_raw.iloc[:-1].copy()
-
-date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
-if date_col in df_raw.columns:
-    df_raw[date_col] = pd.to_datetime(df_raw[date_col], errors="coerce")
-    df_raw["Pickup"] = df_raw[date_col]
-else:
-    df_raw["Pickup"] = pd.NaT
-
-df_raw["Dia"] = df_raw["Pickup"].dt.date
-df_raw["Anio"] = df_raw["Pickup"].dt.isocalendar().year
-df_raw["SemanaNum"] = df_raw["Pickup"].dt.isocalendar().week
-
-if not df_raw["SemanaNum"].dropna().empty:
-    semanas_disponibles = sorted(df_raw["SemanaNum"].dropna().unique())
-    ultimas_dos_semanas = semanas_disponibles[-2:]
-    df_raw = df_raw[df_raw["SemanaNum"].isin(ultimas_dos_semanas)]
-
-if "Orig-Dest" in df_raw.columns:
-    splitted = df_raw["Orig-Dest"].str.split(" - ", n=1, expand=True)
-    df_raw["Origen"] = splitted[0].str.strip()
-    df_raw["Destino"] = splitted[1].str.strip()
-elif "Destino" not in df_raw.columns:
-    df_raw["Destino"] = "Desconocido"
-
-if len(df_raw.columns) > 16:
-    col_st_miles = df_raw.columns[16]
-    df_raw["St.Miles"] = pd.to_numeric(df_raw[col_st_miles], errors="coerce").fillna(0)
-elif "St. Miles" in df_raw.columns:
-    df_raw["St.Miles"] = pd.to_numeric(df_raw["St. Miles"], errors="coerce").fillna(0)
-else:
-    mile_cols = [c for c in df_raw.columns if "mile" in c.lower()]
-    df_raw["St.Miles"] = pd.to_numeric(df_raw[mile_cols[0]], errors="coerce").fillna(0) if mile_cols else 0
-
-total_col = "Total" if "Total" in df_raw.columns else df_raw.columns[4] if len(df_raw.columns) > 4 else None
-if total_col and total_col in df_raw.columns:
-    df_raw["Total"] = pd.to_numeric(df_raw[total_col], errors="coerce").fillna(0)
-else:
-    df_raw["Total"] = 0
-
-if len(df_raw.columns) > 1:
-    col_settle = df_raw.columns[1]
-    df_raw["Unidad"] = df_raw[col_settle].fillna("Vacía").astype(str).str.strip()
-    df_raw.loc[(df_raw["Unidad"] == "") | (df_raw["Unidad"].str.lower() == "nan"), "Unidad"] = "Vacía"
-elif "Settl.#" in df_raw.columns:
-    df_raw["Unidad"] = df_raw["Settl.#"].fillna("Vacía").astype(str).str.strip()
-    df_raw.loc[(df_raw["Unidad"] == "") | (df_raw["Unidad"].str.lower() == "nan"), "Unidad"] = "Vacía"
-else:
-    df_raw["Unidad"] = "Vacía"
-
-if "Created By" in df_raw.columns:
-    df_raw["Operador"] = df_raw["Created By"]
-elif "Operador" not in df_raw.columns:
-    df_raw["Operador"] = "Sin Asignar"
-
-# ==========================================
-# 3. BARRA LATERAL (SIDEBAR Y LOGOTIPO)
+# BARRA LATERAL (SIDEBAR Y LOGOTIPO)
 # ==========================================
 try:
     st.sidebar.image("assets/logo.png", use_container_width=True)
@@ -115,29 +46,21 @@ st.sidebar.header("🎛️ Panel de Control")
 
 modo_analisis = st.sidebar.radio(
     "Selecciona el tipo de vista:",
-    ["General (Gerencia / Dirección)", "Semana Anterior vs. Actual (Comparativo)", "Periodos Definidos"]
+    [
+        "General (Gerencia / Dirección)",
+        "Semana Anterior vs. Actual (Comparativo)",
+    ],
 )
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Filtros Globales")
-
-unidades_sel = st.sidebar.multiselect("Unidad", options=df_raw["Unidad"].unique(), default=df_raw["Unidad"].unique())
-operadores_sel = st.sidebar.multiselect("Operador / Creador", options=df_raw["Operador"].unique(), default=df_raw["Operador"].unique())
-
-df_filtered = df_raw[
-    (df_raw["Unidad"].isin(unidades_sel)) & 
-    (df_raw["Operador"].isin(operadores_sel))
-]
-
 # ==========================================
-# 4. LÓGICA SEGÚN EL MODO SELECCIONADO
+# LÓGICA SEGÚN EL MODO SELECCIONADO
 # ==========================================
 
 if modo_analisis == "General (Gerencia / Dirección)":
     
     df_loads_resumen = pd.DataFrame({
         "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
-        "Total Loads": [46, 0, 74]
+        "Total Loads": [expo_actual, nb_actual, sb_actual]
     })
 
     categorias_orden = [
@@ -150,20 +73,20 @@ if modo_analisis == "General (Gerencia / Dirección)":
     
     df_target_table = pd.DataFrame({
         "Categoría Target": categorias_orden,
-        "Cantidad de Unidades": [22, 16, 5, 1, 2]
+        "Cantidad de Unidades": [u_3000_plus, u_2500_3000, u_2000_2500, u_1500_2000, u_bajo_1500]
     })
     
-    fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [46]})
+    fila_total = pd.DataFrame({"Categoría Target": ["TOTAL"], "Cantidad de Unidades": [total_unidades_target]})
     df_target_table = pd.concat([df_target_table, fila_total], ignore_index=True)
 
+    # 4 KPIs Superiores basados en la tabla oficial
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("1. Tarifa Promedio", f"${df_filtered['Total'].mean():,.2f}")
-    col2.metric("2. Total Loads", "120", "EXPO: 46 | SB: 74")
-    col3.metric("3. Flotilla Activa Target", "46 unidades")
-    col4.metric("4. Total St. Miles", f"{df_filtered['St.Miles'].sum():,.1f} mi")
+    col1.metric("1. Estado Operativo", "Activo")
+    col2.metric("2. Total Loads", f"{total_loads_actual}", f"EXPO: {expo_actual} | SB: {sb_actual}")
+    col3.metric("3. Flotilla Activa Target", f"{total_unidades_target} unidades")
+    col4.metric("4. Unidades > 3,000 Millas", f"{u_3000_plus} un.", "Meta cumplida")
     
     st.markdown("---")
-    
     st.markdown("### 📊 Métricas Operativas (Semana Actual)")
     
     lc1, lc2 = st.columns(2)
@@ -186,7 +109,6 @@ if modo_analisis == "General (Gerencia / Dirección)":
         st.plotly_chart(fig_loads, use_container_width=True)
 
     st.markdown("---")
-    
     st.subheader("🎯 Target de Unidades Millas (Semana Actual)")
     
     tc1, tc2 = st.columns([1, 1.5])
@@ -209,42 +131,14 @@ if modo_analisis == "General (Gerencia / Dirección)":
         st.plotly_chart(fig_target, use_container_width=True)
 
     st.markdown("---")
-    
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        st.subheader("1. 🛣️ Detalle de Millas por Unidad (Columna Q - St. Miles)")
-        df_unidades_filtered = df_filtered.groupby("Unidad")["St.Miles"].sum().reset_index()
-        df_unidades_filtered.columns = ["Unidad", "Millas"]
-        
-        fig_u = px.bar(df_unidades_filtered, x="Unidad", y="Millas", text_auto='.2s', color="Millas", color_continuous_scale="Blues")
-        fig_u.add_hline(y=OBJETIVO_MILLAS_SEMANAL, line_dash="dash", line_color="red", annotation_text=f"Meta: {OBJETIVO_MILLAS_SEMANAL} mi", annotation_position="bottom right")
-        st.plotly_chart(fig_u, use_container_width=True)
-        
-        st.subheader("3. 💰 Ingresos por Tarifa (Distribución)")
-        fig_t = px.box(df_filtered, x="Destino", y="Total", color="Destino")
-        fig_t.update_layout(yaxis_title="Tarifa Total ($)")
-        st.plotly_chart(fig_t, use_container_width=True)
-
-    with c2:
-        st.subheader("2. 📍 Rendimiento por Destino")
-        df_destinos = df_filtered.groupby("Destino")["St.Miles"].sum().reset_index()
-        fig_d = px.pie(df_destinos, names="Destino", values="St.Miles", hole=0.4)
-        st.plotly_chart(fig_d, use_container_width=True)
-        
-        st.subheader("4. 👤 Rendimiento por Operador / Creador")
-        df_ops = df_filtered.groupby("Operador")[["St.Miles", "Total"]].mean().reset_index()
-        fig_o = px.bar(df_ops, x="Operador", y="St.Miles", color="Total", text_auto='.2s', color_continuous_scale="Viridis")
-        fig_o.update_layout(yaxis_title="Promedio de St. Miles")
-        st.plotly_chart(fig_o, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📋 Detalle Completo de Registros")
-    st.dataframe(df_filtered, use_container_width=True)
+    st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
+    st.info("""
+    - **342:** Op en descanso.
+    """)
 
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
-    st.markdown("Comparativa directa y consolidada.")
+    st.markdown("Comparativa directa basada estrictamente en el reporte actual (BSCF).")
     
     df_comparativa_2w = pd.DataFrame({
         "Categoría / Rango": [
@@ -259,17 +153,20 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
             "UNIDADES BAJO 1,500 MILLAS",
             "TOTAL UNIDADES TARGET"
         ],
-        "Semana Anterior": [45, 0, 76, 121, 21, 14, 6, 3, 0, 44],
-        "Semana Actual": [46, 0, 74, 120, 22, 16, 5, 1, 2, 46]
+        "Semana Anterior": [43, 0, 72, 115, 23, 15, 2, 1, 8, 49],
+        "Semana Actual": [
+            expo_actual, nb_actual, sb_actual, total_loads_actual,
+            u_3000_plus, u_2500_3000, u_2000_2500, u_1500_2000, u_bajo_1500, total_unidades_target
+        ]
     })
     
     df_comparativa_2w["Diferencia (Var)"] = df_comparativa_2w["Semana Actual"] - df_comparativa_2w["Semana Anterior"]
     df_comparativa_2w["% Var"] = ((df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior"].replace(0, 1)) * 100).round(1).astype(str) + "%"
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Loads (Semana Actual)", "120 loads", "-1 vs sem. anterior")
-    c2.metric("Unidades > 3,000 Millas", "22 unidades", "+1 vs sem. anterior")
-    c3.metric("Total Unidades Evaluadas", "46 unidades", "+2 vs sem. anterior")
+    c1.metric("Total Loads (Semana Actual)", f"{total_loads_actual} loads", "+6 vs sem. anterior")
+    c2.metric("Unidades > 3,000 Millas", f"{u_3000_plus} unidades", "-2 vs sem. anterior")
+    c3.metric("Total Unidades Evaluadas", f"{total_unidades_target} unidades", "-5 vs sem. anterior")
 
     st.markdown("---")
     st.subheader("📋 Tabla Comparativa Consolidada (Semana Anterior vs Actual)")
@@ -299,57 +196,11 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.markdown("---")
     st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
     st.info("""
-    - **Op de la unidad 331:** Regresó de descanso el jueves[span_5](start_span)[span_5](end_span).
-    - **Op de la unidad 343:** Regresó de descanso el miércoles.
+    - **342:** Op en descanso.
     """)
-
-elif modo_analisis == "Periodos Definidos":
-    st.title("📅 Análisis por Periodos Definidos y Seguimiento de Meta")
-    
-    valid_dates = df_filtered["Dia"].dropna()
-    if not valid_dates.empty:
-        min_date = valid_dates.min()
-        max_date = valid_dates.max()
-        
-        col_f1, col_f2 = st.columns(2)
-        f_inicio = col_f1.date_input("Fecha de Inicio", min_value=min_date, max_value=max_date, value=min_date)
-        f_fin = col_f2.date_input("Fecha de Fin", min_value=min_date, max_value=max_date, value=max_date)
-        
-        df_periodo = df_filtered[(df_filtered["Dia"] >= f_inicio) & (df_filtered["Dia"] <= f_fin)]
-        
-        total_millas_periodo = df_periodo['St.Miles'].sum()
-        st.metric("Total de St. Miles en el Periodo Seleccionado", f"{total_millas_periodo:,.1f} mi")
-        
-        st.markdown("### 🎯 Desglose de Cumplimiento por Unidad en el Periodo")
-        df_resumen_periodo = df_periodo.groupby("Unidad")["St.Miles"].sum().reset_index()
-        df_resumen_periodo.columns = ["Unidad", "Millas Acumuladas"]
-        
-        def clasificar_target(millas):
-            if millas > 3000:
-                return "UNIDADES 3,000 + MILLAS"
-            elif millas > 2500:
-                return "UNIDADES 2,500 - 3,000 MILLAS"
-            elif millas > 2000:
-                return "UNIDADES 2,000-2,500 MILLAS"
-            elif millas > 1500:
-                return "UNIDADES 1,500 - 2,000 MILLAS"
-            else:
-                return "UNIDADES BAJO 1,500 MILLAS"
-
-        df_resumen_periodo["Rango Target"] = df_resumen_periodo["Millas Acumuladas"].apply(clasificar_target)
-        st.dataframe(df_resumen_periodo.style.format({"Millas Acumuladas": "{:,.1f}"}), use_container_width=True)
-
-        st.markdown("---")
-        df_tiempo = df_periodo.groupby("Dia")[["St.Miles"]].sum().reset_index()
-        fig_tiempo = px.line(df_tiempo, x="Dia", y="St.Miles", markers=True, title="Evolución de St. Miles per Día en el Periodo")
-        fig_tiempo.update_layout(yaxis_title="Millas Totales")
-        st.plotly_chart(fig_tiempo, use_container_width=True)
-    else:
-        st.warning("No se encontraron rangos de fecha válidos en los reportes.")
 
 # ==========================================
 # PIE DE PÁGINA
 # ==========================================
 st.markdown("---")
 st.caption("Sistema de Control Privado - Morgan Express © 2026")
-        
