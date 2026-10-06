@@ -39,8 +39,7 @@ u_bajo_1500 = 0
 # 3. CONEXIÓN SEGURA A LA NUBE (GOOGLE SHEETS PRINCIPAL)
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
-url_excel_agosto = "https://docs.google.com/spreadsheets/d/1RuHh-2Hkv8pHU35VvfMKFfqdbIon_ZB4/edit?usp=drive_link&ouid=113540979042769496009&rtpof=true&sd=true"
-
+url_excel_agosto = "https://docs.google.com/spreadsheets/d/1RuHh-2Hkv8pHU35VvfMKFfqdbIon_ZB4/edit?usp=drivesdk&ouid=113540979042769496009&rtpof=true&sd=true"
 @st.cache_data(ttl=600)
 def load_data(url):
     try:
