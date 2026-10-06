@@ -8,7 +8,7 @@ elif modo_analisis == "Generador de Resumen (Report_3.xlsx)":
     # ---------------------------------------------------------
     # 🔗 AQUÍ PONES LA URL DE TU ARCHIVO EN GOOGLE DRIVE/SHEETS
     # ---------------------------------------------------------
-    url_base_datos_reporte = "URL_DE_TU_NUEVO_GOOGLE_SHEET" 
+    url_base_datos_reporte = "https://docs.google.com/spreadsheets/d/1xsnVVXYGw6M9oN8zgphbvO5-UMY4n4vR/edit?usp=drive_link&ouid=113540979042769496009&rtpof=true&sd=true" 
     
     # Intento de lectura automatizada desde la nube
     with st.spinner("Sincronizando base de datos desde Google Drive..."):
