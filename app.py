@@ -21,7 +21,7 @@ st.markdown("Vista general consolidada: Operaciones, Comparativas y Resumen Auto
 st.markdown("---")
 
 # ==========================================
-# 2. DATOS OFICIALES DE LA SEMANA ACTUAL (HARDCODED - IMAGEN BSCF)
+# 2. DATOS OFICIALES DE LA SEMANA ACTUAL (BSCF)
 # ==========================================
 total_loads_actual = 121
 expo_actual = 45
@@ -36,10 +36,11 @@ u_1500_2000 = 3
 u_bajo_1500 = 0
 
 # ==========================================
-# 3. CONEXIÓN SEGURA A LA NUBE (GOOGLE SHEETS PRINCIPAL)
+# 3. CONEXIÓN SEGURA A LA NUBE (GOOGLE SHEETS)
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 url_excel_agosto = "https://docs.google.com/spreadsheets/d/1RuHh-2Hkv8pHU35VvfMKFfqdbIon_ZB4/edit?usp=drivesdk&ouid=113540979042769496009&rtpof=true&sd=true"
+
 @st.cache_data(ttl=600)
 def load_data(url):
     try:
@@ -48,7 +49,7 @@ def load_data(url):
     except Exception as e:
         return pd.DataFrame() 
 
-with st.spinner("Descargando datos operativos"):
+with st.spinner("Descargando datos operativos desde Google Drive..."):
     df_raw = load_data(url_excel_agosto)
 
 # Procesamiento de Google Sheets
@@ -59,8 +60,7 @@ if not df_raw.empty:
 
     date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
     if date_col in df_raw.columns:
-        df_raw[date_col] = pd.to_datetime(df_raw[date_col], errors="coerce")
-        df_raw["Pickup"] = df_raw[date_col]
+        df_raw["Pickup"] = pd.to_datetime(df_raw[date_col], errors="coerce")
     else:
         df_raw["Pickup"] = pd.NaT
 
@@ -91,7 +91,7 @@ if not df_raw.empty:
 # ==========================================
 try:
     st.sidebar.image("assets/logo.png", use_container_width=True)
-except Exception:
+except:
     pass
 
 st.sidebar.header("🎛️ Panel de Control")
@@ -102,7 +102,7 @@ modo_analisis = st.sidebar.radio(
         "General (Gerencia / Dirección)",
         "Semana Anterior vs. Actual (Comparativo)",
         "Periodos Definidos (Google Sheets)",
-        "Generador de Resumen"
+        "Generador de Resumen (Automático Google Sheets)"
     ],
 )
 
@@ -110,15 +110,15 @@ df_filtered = df_raw.copy()
 if not df_raw.empty and modo_analisis == "Periodos Definidos (Google Sheets)":
     st.sidebar.markdown("---")
     st.sidebar.subheader("Filtros Operativos")
-    unidades_sel = st.sidebar.multiselect("Unidad", options=df_raw["Unidad"].unique(), default=df_raw["Unidad"].unique())
+    opciones_unidades = df_raw["Unidad"].unique()
+    unidades_sel = st.sidebar.multiselect("Unidad", options=opciones_unidades, default=opciones_unidades)
     df_filtered = df_raw[df_raw["Unidad"].isin(unidades_sel)]
 
 # ==========================================
-# 5. LÓGICA PRINCIPAL
+# 5. LÓGICA PRINCIPAL (VISTAS)
 # ==========================================
 
 if modo_analisis == "General (Gerencia / Dirección)":
-    
     df_loads_resumen = pd.DataFrame({
         "Categoría Load": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB"],
         "Total Loads": [expo_actual, nb_actual, sb_actual]
@@ -145,7 +145,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
     col4.metric("4. Unidades > 3,000 Millas", f"{u_3000_plus} un.", "Meta cumplida")
     
     st.markdown("---")
-    st.markdown("### 📊 Métricas Operativas (Semana Actual)")
+    st.markdown("### Métricas Operativas (Semana Actual)")
     
     lc1, lc2 = st.columns(2)
     with lc1:
@@ -162,7 +162,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
         st.plotly_chart(fig_loads, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("🎯 Target de Unidades Millas (Semana Actual)")
+    st.subheader("Target de Unidades Millas (Semana Actual)")
     
     tc1, tc2 = st.columns([1, 1.5])
     with tc1:
@@ -179,12 +179,8 @@ if modo_analisis == "General (Gerencia / Dirección)":
         fig_target.update_layout(xaxis_title="", yaxis_title="No. de Unidades", showlegend=False)
         st.plotly_chart(fig_target, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
-    st.info("- **342:** Op en descanso.")
-
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
-    st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
+    st.title("⏱ Análisis Comparativo: Semana Anterior vs. Semana Actual")
     
     df_comparativa_2w = pd.DataFrame({
         "Categoría / Rango": [
@@ -201,10 +197,7 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     })
     
     df_comparativa_2w["Diferencia (Var)"] = df_comparativa_2w["Semana Actual"] - df_comparativa_2w["Semana Anterior"]
-    
-    # Calculo de variacion protegido
-    var_relativa = df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior"].replace(0, 1)
-    df_comparativa_2w["% Var"] = (var_relativa * 100).round(1).astype(str) + "%"
+    df_comparativa_2w["% Var"] = ((df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior"].replace(0, 1)) * 100).round(1).astype(str) + "%"
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Loads (Semana Actual)", f"{total_loads_actual} loads", "+6 vs sem. anterior")
@@ -214,20 +207,6 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.markdown("---")
     st.subheader("📋 Tabla Comparativa Consolidada")
     st.dataframe(df_comparativa_2w.set_index("Categoría / Rango"), use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📊 Gráfica Comparativa de Rangos Target")
-    df_melted_2w = df_comparativa_2w.iloc[4:9].melt(
-        id_vars="Categoría / Rango", value_vars=["Semana Anterior", "Semana Actual"], 
-        var_name="Semana", value_name="Unidades"
-    )
-    
-    fig_comp_2w = px.bar(
-        df_melted_2w, x="Categoría / Rango", y="Unidades", color="Semana", barmode="group",
-        color_discrete_sequence=["#adb5bd", "#1864ab"]
-    )
-    fig_comp_2w.update_layout(xaxis_title="", yaxis_title="Cantidad de Unidades")
-    st.plotly_chart(fig_comp_2w, use_container_width=True)
 
 elif modo_analisis == "Periodos Definidos (Google Sheets)":
     st.title("📅 Análisis por Periodos Definidos y Seguimiento de Meta")
@@ -246,4 +225,131 @@ elif modo_analisis == "Periodos Definidos (Google Sheets)":
             total_millas_periodo = df_periodo['St.Miles'].sum()
             st.metric("Total de St. Miles en el Periodo Seleccionado", f"{total_millas_periodo:,.1f} mi")
             
-            st.markdown("### 🎯 Desglose
+            st.markdown("### Desglose de Cumplimiento por Unidad")
+            df_resumen_periodo = df_periodo.groupby("Unidad")["St.Miles"].sum().reset_index()
+            df_resumen_periodo.columns = ["Unidad", "Millas Acumuladas"]
+            
+            def clasificar_target(millas):
+                if millas > 3000: return "UNIDADES 3,000 + MILLAS"
+                elif millas >= 2500: return "UNIDADES 2,500 - 3,000 MILLAS"
+                elif millas >= 2000: return "UNIDADES 2,000-2,500 MILLAS"
+                elif millas >= 1500: return "UNIDADES 1,500 - 2,000 MILLAS"
+                else: return "UNIDADES BAJO 1,500 MILLAS"
+
+            df_resumen_periodo["Rango Target"] = df_resumen_periodo["Millas Acumuladas"].apply(clasificar_target)
+            st.dataframe(df_resumen_periodo.style.format({"Millas Acumuladas": "{:,.1f}"}), use_container_width=True)
+        else:
+            st.warning("No se encontraron fechas válidas.")
+    else:
+        st.error("No se pudieron cargar los datos de la nube.")
+
+elif modo_analisis == "Generador de Resumen (Automático Google Sheets)":
+    st.title("📊 Generador de Resumen Automático (BSCF)")
+    st.markdown("Conectado directamente a la Base de Datos en Google Drive.")
+    
+    # 🔗 REEMPLAZA ESTA RUTA CON EL ENLACE DE TU GOOGLE SHEET (REPORT_3)
+    url_base_datos_reporte = "AQUI_PON_TU_ENLACE_DE_GOOGLE_SHEET" 
+    
+    with st.spinner("Sincronizando nueva base de datos..."):
+        try:
+            df_rep = load_data(url_base_datos_reporte)
+            
+            if df_rep is not None and not df_rep.empty:
+                st.success("¡Base de datos sincronizada correctamente!")
+                
+                df_rep.columns = df_rep.columns.astype(str).str.strip()
+                if len(df_rep) > 0 and "Total" in str(df_rep.iloc[-1].values):
+                    df_rep = df_rep.iloc[:-1].copy()
+                    
+                col_millas = None
+                if "St. Miles" in df_rep.columns:
+                    col_millas = "St. Miles"
+                elif len(df_rep.columns) > 16:
+                    col_millas = df_rep.columns[16]
+                    
+                df_rep["Millas_Calc"] = pd.to_numeric(df_rep[col_millas], errors="coerce").fillna(0) if col_millas else 0
+                
+                col_unidad = None
+                if "Settl.#" in df_rep.columns:
+                    col_unidad = "Settl.#"
+                elif len(df_rep.columns) > 1:
+                    col_unidad = df_rep.columns[1]
+                    
+                df_rep["Unidad_Calc"] = df_rep[col_unidad].fillna("Vacía").astype(str).str.strip() if col_unidad else "Vacía"
+                df_rep = df_rep[df_rep["Unidad_Calc"].str.lower() != "nan"]
+                
+                if "Orig-Dest" in df_rep.columns:
+                    df_rep[["Origen", "Destino"]] = df_rep["Orig-Dest"].str.split(" - ", n=1, expand=True)
+                    df_rep["Destino"] = df_rep["Destino"].fillna("").astype(str)
+                elif "Destino" not in df_rep.columns:
+                    df_rep["Destino"] = ""
+                    
+                expo_loads = df_rep[df_rep["Destino"].str.contains("EXPO|NLD", case=False, na=False)].shape[0]
+                sb_loads = df_rep[df_rep["Destino"].str.contains("SB", case=False, na=False)].shape[0]
+                nb_loads = df_rep[df_rep["Destino"].str.contains("NB|LAREDO", case=False, na=False) & ~df_rep["Destino"].str.contains("EXPO", case=False, na=False)].shape[0]
+                total_loads = len(df_rep)
+                
+                df_agrupado = df_rep.groupby("Unidad_Calc")["Millas_Calc"].sum().reset_index()
+                
+                def clasificador_bucket(m):
+                    if m >= 3000: return "UNIDADES 3,000 + MILLAS"
+                    elif m >= 2500: return "UNIDADES 2,500 - 3,000 MILLAS"
+                    elif m >= 2000: return "UNIDADES 2,000-2,500 MILLAS"
+                    elif m >= 1500: return "UNIDADES 1,500 - 2,000 MILLAS"
+                    else: return "UNIDADES BAJO 1,500 MILLAS"
+                    
+                df_agrupado["Categoria"] = df_agrupado["Millas_Calc"].apply(clasificador_bucket)
+                conteo = df_agrupado["Categoria"].value_counts()
+                
+                t_3000 = conteo.get("UNIDADES 3,000 + MILLAS", 0)
+                t_2500 = conteo.get("UNIDADES 2,500 - 3,000 MILLAS", 0)
+                t_2000 = conteo.get("UNIDADES 2,000-2,500 MILLAS", 0)
+                t_1500 = conteo.get("UNIDADES 1,500 - 2,000 MILLAS", 0)
+                t_bajo = conteo.get("UNIDADES BAJO 1,500 MILLAS", 0)
+                tot_uni = len(df_agrupado)
+                
+                df_res_loads = pd.DataFrame({
+                    "Categoría": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB", "TOTAL LOADS"],
+                    "Cantidad": [expo_loads, nb_loads, sb_loads, total_loads]
+                })
+                
+                df_res_target = pd.DataFrame({
+                    "TARGET DE UNIDADES MILLAS": [
+                        "TOTAL", "UNIDADES 3,000 + MILLAS", "UNIDADES 2,500 - 3,000 MILLAS", 
+                        "UNIDADES 2,000-2,500 MILLAS", "UNIDADES 1,500 - 2,000 MILLAS", "UNIDADES BAJO 1,500 MILLAS"
+                    ],
+                    "3,000 MILLAS": [tot_uni, t_3000, t_2500, t_2000, t_1500, t_bajo]
+                })
+                
+                st.markdown("### 🌟 Nuevos Indicadores Estratégicos Propuestos")
+                c1, c2, c3 = st.columns(3)
+                
+                pct_meta = ((t_3000 + t_2500) / tot_uni * 100) if tot_uni > 0 else 0
+                millas_totales = df_rep["Millas_Calc"].sum()
+                promedio_millas = millas_totales / tot_uni if tot_uni > 0 else 0
+                
+                c1.metric("Eficiencia de Meta (>2,500 mi)", f"{pct_meta:.1f}%", "Unidades rentables")
+                c2.metric("Total de St. Miles Generadas", f"{millas_totales:,.1f} mi")
+                c3.metric("Promedio de Millas por Unidad", f"{promedio_millas:,.1f} mi")
+                
+                st.markdown("---")
+                st.markdown("### 📊 Tablas de Resumen Generadas (Formato BSCF Oficial)")
+                colA, colB = st.columns(2)
+                with colA:
+                    st.markdown("**Desglose de Cargas**")
+                    st.dataframe(df_res_loads.set_index("Categoría"), use_container_width=True)
+                with colB:
+                    st.markdown("**Target de Unidades Millas**")
+                    st.dataframe(df_res_target.set_index("TARGET DE UNIDADES MILLAS"), use_container_width=True)
+                    
+                st.markdown("---")
+                st.subheader("📋 Vista Previa de los Datos Sincronizados de Google Sheets")
+                st.dataframe(df_rep, use_container_width=True)
+            else:
+                st.warning("La base de datos está vacía o el enlace no es válido.")
+        except Exception as e:
+            st.error(f"Error de conexión con la nube: {e}")
+
+st.markdown("---")
+st.caption("Sistema de Control Privado - Morgan Express © 2026")
+    
