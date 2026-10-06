@@ -52,7 +52,7 @@ def load_data(url):
 with st.spinner("Descargando datos operativos desde Google Drive..."):
     df_raw = load_data(url_excel_agosto)
 
-# Procesamiento de Google Sheets (Solo si se cargó correctamente)
+# Procesamiento de Google Sheets
 if not df_raw.empty:
     df_raw.columns = df_raw.columns.astype(str).str.strip()
     if len(df_raw) > 0:
@@ -115,7 +115,7 @@ if not df_raw.empty and modo_analisis == "Periodos Definidos (Google Sheets)":
     df_filtered = df_raw[df_raw["Unidad"].isin(unidades_sel)]
 
 # ==========================================
-# 5. LÓGICA PRINCIPAL (IF / ELIF BIEN ALINEADOS)
+# 5. LÓGICA PRINCIPAL
 # ==========================================
 
 if modo_analisis == "General (Gerencia / Dirección)":
@@ -182,13 +182,10 @@ if modo_analisis == "General (Gerencia / Dirección)":
 
     st.markdown("---")
     st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
-    st.info("""
-    - **342:** Op en descanso.
-    """)
+    st.info("- **342:** Op en descanso.")
 
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
-    st.markdown("Comparativa directa basada estrictamente en los reportes oficiales.")
     
     df_comparativa_2w = pd.DataFrame({
         "Categoría / Rango": [
@@ -205,7 +202,10 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     })
     
     df_comparativa_2w["Diferencia (Var)"] = df_comparativa_2w["Semana Actual"] - df_comparativa_2w["Semana Anterior"]
-    df_comparativa_2w["% Var"] = ((df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior"].replace(0, 1)) * 100).round(1).astype(str) + "%"
+    
+    # Calculo de variacion protegido
+    var_relativa = df_comparativa_2w["Diferencia (Var)"] / df_comparativa_2w["Semana Anterior"].replace(0, 1)
+    df_comparativa_2w["% Var"] = (var_relativa * 100).round(1).astype(str) + "%"
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Loads (Semana Actual)", f"{total_loads_actual} loads", "+6 vs sem. anterior")
@@ -247,16 +247,4 @@ elif modo_analisis == "Periodos Definidos (Google Sheets)":
             total_millas_periodo = df_periodo['St.Miles'].sum()
             st.metric("Total de St. Miles en el Periodo Seleccionado", f"{total_millas_periodo:,.1f} mi")
             
-            st.markdown("### 🎯 Desglose de Cumplimiento por Unidad en el Periodo")
-            df_resumen_periodo = df_periodo.groupby("Unidad")["St.Miles"].sum().reset_index()
-            df_resumen_periodo.columns = ["Unidad", "Millas Acumuladas"]
-            
-            def clasificar_target(millas):
-                if millas > 3000: return "UNIDADES 3,000 + MILLAS"
-                elif millas >= 2500: return "UNIDADES 2,500 - 3,000 MILLAS"
-                elif millas >= 2000: return "UNIDADES 2,000-2,500 MILLAS"
-                elif millas >= 1500: return "UNIDADES 1,500 - 2,000 MILLAS"
-                else: return "UNIDADES BAJO 1,500 MILLAS"
-
-            df_resumen_periodo["Rango Target"] = df_resumen_periodo["Millas Acumuladas"].apply(clasificar_target)
-            st.dataframe(df_resumen_periodo.style.format({"Millas Acumuladas": "{:,.1
+            st.markdown("### 🎯 Desglose
