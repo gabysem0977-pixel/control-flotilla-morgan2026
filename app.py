@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada: Operaciones, Comparativas y Resumen Automático (Google Sheets).")
+st.markdown("Vista general consolidada: Operaciones, Comparativas y Resumen Automático.")
 st.markdown("---")
 
 # ==========================================
@@ -49,7 +49,7 @@ def load_data(url):
     except Exception as e:
         return pd.DataFrame() 
 
-with st.spinner("Descargando datos operativos desde Google Drive..."):
+with st.spinner("Descargando datos operativos"):
     df_raw = load_data(url_excel_agosto)
 
 # Procesamiento de Google Sheets
@@ -103,7 +103,7 @@ modo_analisis = st.sidebar.radio(
         "General (Gerencia / Dirección)",
         "Semana Anterior vs. Actual (Comparativo)",
         "Periodos Definidos (Google Sheets)",
-        "Generador de Resumen (Automático Google Sheets)"
+        "Generador de Resumen"
     ],
 )
 
