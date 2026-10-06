@@ -17,7 +17,7 @@ st.set_page_config(
 OBJETIVO_MILLAS_SEMANAL = 3000
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Vista general consolidada: Operaciones, Comparativas y Cuentas por Cobrar.")
+st.markdown("Vista general consolidada: Operaciones, Comparativas y Resumen de Reportes.")
 st.markdown("---")
 
 # ==========================================
@@ -47,7 +47,7 @@ def load_data(url):
         data = conn.read(spreadsheet=url, header=7)
         return data
     except Exception as e:
-        return pd.DataFrame() # Retorna DF vacío si falla
+        return pd.DataFrame() 
 
 with st.spinner("Descargando datos operativos desde la nube..."):
     df_raw = load_data(url_excel_agosto)
@@ -67,7 +67,6 @@ if not df_raw.empty:
 
     df_raw["Dia"] = df_raw["Pickup"].dt.date
     
-    # Extraer Origen, Destino, Millas, Unidad, etc.
     if "Orig-Dest" in df_raw.columns:
         splitted = df_raw["Orig-Dest"].str.split(" - ", n=1, expand=True)
         df_raw["Origen"] = splitted[0].str.strip()
@@ -95,18 +94,17 @@ except Exception:
 
 st.sidebar.header("🎛️ Panel de Control")
 
-# NUEVO MENÚ CON LA PESTAÑA DE AR AGING
+# MENÚ CON LA NUEVA PESTAÑA PARA REPORT_3.XLSX
 modo_analisis = st.sidebar.radio(
     "Selecciona el tipo de vista:",
     [
         "General (Gerencia / Dirección)",
         "Semana Anterior vs. Actual (Comparativo)",
         "Periodos Definidos (Google Sheets)",
-        "Cuentas por Cobrar (AR Aging)"
+        "Generador de Resumen (Report_3.xlsx)"  # <-- NUEVA PESTAÑA SUSTITUIDA
     ],
 )
 
-# Filtros para la sección de Periodos (Google Sheets)
 df_filtered = df_raw.copy()
 if not df_raw.empty and modo_analisis == "Periodos Definidos (Google Sheets)":
     st.sidebar.markdown("---")
@@ -182,11 +180,6 @@ if modo_analisis == "General (Gerencia / Dirección)":
         fig_target.update_layout(xaxis_title="", yaxis_title="No. de Unidades", showlegend=False)
         st.plotly_chart(fig_target, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
-    st.info("""
-    - **342:** Op en descanso.
-    """)
 
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
     st.title("⏱️ Análisis Comparativo: Semana Anterior vs. Semana Actual")
@@ -268,101 +261,147 @@ elif modo_analisis == "Periodos Definidos (Google Sheets)":
     else:
         st.error("No se pudieron cargar los datos de la nube para este análisis.")
 
-elif modo_analisis == "Cuentas por Cobrar (AR Aging)":
-    st.title("💸 Dashboard de Cuentas por Cobrar (AR Aging)")
-    st.markdown("Análisis estratégico de cartera, antigüedad de saldos y concentración de clientes.")
+# ==========================================
+# NUEVA PESTAÑA SUSTITUIDA: GENERADOR BSCF DESDE REPORT_3.XLSX
+# ==========================================
+elif modo_analisis == "Generador de Resumen (Report_3.xlsx)":
+    st.title("📊 Generador de Resumen Automático (BSCF)")
+    st.markdown("Sube tu archivo `Report_3.xlsx` para calcular automáticamente las tablas oficiales e indicadores de la semana.")
     
-    # Widget en la barra lateral para subir archivo
     st.sidebar.markdown("---")
-    st.sidebar.info("Sube tu archivo Excel de Cuentas por Cobrar para visualizar los datos.")
-    uploaded_file = st.sidebar.file_uploader("Actualizar reporte AR Aging", type=["xlsx", "xls", "csv"])
-    
-    # Nombre del archivo local esperado (por si ya lo tienes en la carpeta)
-    archivo_ar = "Morgan_Ports_AR_Aging_14-Sep-2026_Presentado (1).xlsx"
-    
-    df_ar = pd.DataFrame()
+    st.sidebar.info("Carga aquí tu archivo Excel base.")
+    uploaded_file = st.sidebar.file_uploader("Subir Report_3.xlsx", type=["xlsx", "xls", "csv"])
+    archivo_local = "Report_3.xlsx"
     
     try:
+        # Cargar Datos
         if uploaded_file is not None:
             if uploaded_file.name.endswith('.csv'):
-                df_ar = pd.read_csv(uploaded_file)
+                df_rep = pd.read_csv(uploaded_file)
             else:
-                df_ar = pd.read_excel(uploaded_file)
-            st.success("¡Datos de Cuentas por Cobrar cargados exitosamente desde el archivo subido!")
+                df_rep = pd.read_excel(uploaded_file)
+            st.success("¡Datos cargados exitosamente desde el archivo subido!")
         else:
-            # Intenta cargar el archivo si está en la misma carpeta del script
-            df_ar = pd.read_excel(archivo_ar)
-            st.success(f"¡Datos cargados exitosamente desde {archivo_ar}!")
-    except FileNotFoundError:
-        st.warning("⚠️ Sube tu reporte AR Aging usando el botón de la barra lateral izquierda para generar los indicadores.")
-    except Exception as e:
-        st.error(f"Ocurrió un error al procesar el archivo: {e}")
+            df_rep = pd.read_excel(archivo_local)
+            st.success(f"¡Datos cargados exitosamente desde {archivo_local} local!")
+            
+        # PROCESAMIENTO AUTOMATIZADO DE LA BASE
+        df_rep.columns = df_rep.columns.astype(str).str.strip()
         
-    if not df_ar.empty:
-        # Detección inteligente de columnas
-        col_cliente = df_ar.columns[0] 
-        for c in df_ar.columns:
-            if any(palabra in str(c).lower() for palabra in ["cliente", "customer", "name", "nombre", "port"]):
-                col_cliente = c
-                break
-                
-        col_total = df_ar.columns[-1] 
-        for c in df_ar.columns:
-            if any(palabra in str(c).lower() for palabra in ["total", "balance", "monto", "saldo", "due", "usd"]):
-                col_total = c
-                break
-                
-        df_ar[col_total] = pd.to_numeric(df_ar[col_total], errors="coerce").fillna(0)
+        # Omitir fila final de Totales si existe en el Excel
+        if len(df_rep) > 0 and "Total" in str(df_rep.iloc[-1].values):
+            df_rep = df_rep.iloc[:-1].copy()
+            
+        # 1. Extraer Millas (St. Miles)
+        col_millas = None
+        if "St. Miles" in df_rep.columns:
+            col_millas = "St. Miles"
+        elif len(df_rep.columns) > 16:
+            col_millas = df_rep.columns[16]
+            
+        if col_millas:
+            df_rep["Millas_Calc"] = pd.to_numeric(df_rep[col_millas], errors="coerce").fillna(0)
+        else:
+            df_rep["Millas_Calc"] = 0
+            
+        # 2. Extraer Unidades (Settl.#)
+        col_unidad = None
+        if "Settl.#" in df_rep.columns:
+            col_unidad = "Settl.#"
+        elif len(df_rep.columns) > 1:
+            col_unidad = df_rep.columns[1]
+            
+        if col_unidad:
+            df_rep["Unidad_Calc"] = df_rep[col_unidad].fillna("Vacía").astype(str).str.strip()
+        else:
+            df_rep["Unidad_Calc"] = "Vacía"
+            
+        # Filtro de unidades válidas
+        df_rep = df_rep[df_rep["Unidad_Calc"].str.lower() != "nan"]
+            
+        # 3. Extraer y Calcular Cargas (Loads / Destinos)
+        if "Orig-Dest" in df_rep.columns:
+            df_rep[["Origen", "Destino"]] = df_rep["Orig-Dest"].str.split(" - ", n=1, expand=True)
+            df_rep["Destino"] = df_rep["Destino"].fillna("").astype(str)
+        elif "Destino" not in df_rep.columns:
+            df_rep["Destino"] = ""
+            
+        expo_loads = df_rep[df_rep["Destino"].str.contains("EXPO|NLD", case=False, na=False)].shape[0]
+        sb_loads = df_rep[df_rep["Destino"].str.contains("SB", case=False, na=False)].shape[0]
+        nb_loads = df_rep[df_rep["Destino"].str.contains("NB|LAREDO", case=False, na=False) & ~df_rep["Destino"].str.contains("EXPO", case=False, na=False)].shape[0]
+        total_loads = len(df_rep)
         
-        # Cálculos Financieros
-        cartera_total = df_ar[col_total].sum()
-        total_clientes = df_ar[col_cliente].nunique()
-        promedio_deuda = cartera_total / total_clientes if total_clientes > 0 else 0
+        # 4. Agrupación por Unidad para generar el TARGET
+        df_agrupado = df_rep.groupby("Unidad_Calc")["Millas_Calc"].sum().reset_index()
         
-        st.markdown("### 📊 Indicadores Clave de Desempeño (KPIs)")
+        def clasificador_bucket(m):
+            if m >= 3000: return "UNIDADES 3,000 + MILLAS"
+            elif m >= 2500: return "UNIDADES 2,500 - 3,000 MILLAS"
+            elif m >= 2000: return "UNIDADES 2,000-2,500 MILLAS"
+            elif m >= 1500: return "UNIDADES 1,500 - 2,000 MILLAS"
+            else: return "UNIDADES BAJO 1,500 MILLAS"
+            
+        df_agrupado["Categoria"] = df_agrupado["Millas_Calc"].apply(clasificador_bucket)
+        conteo = df_agrupado["Categoria"].value_counts()
+        
+        t_3000 = conteo.get("UNIDADES 3,000 + MILLAS", 0)
+        t_2500 = conteo.get("UNIDADES 2,500 - 3,000 MILLAS", 0)
+        t_2000 = conteo.get("UNIDADES 2,000-2,500 MILLAS", 0)
+        t_1500 = conteo.get("UNIDADES 1,500 - 2,000 MILLAS", 0)
+        t_bajo = conteo.get("UNIDADES BAJO 1,500 MILLAS", 0)
+        tot_uni = len(df_agrupado)
+        
+        # --- CREACIÓN DE LAS TABLAS IDENTICAS A LA IMAGEN ---
+        df_res_loads = pd.DataFrame({
+            "Categoría": ["EXPO DE NLD", "NB DE LAREDO", "VIAJES DE SB", "TOTAL LOADS"],
+            "Cantidad": [expo_loads, nb_loads, sb_loads, total_loads]
+        })
+        
+        df_res_target = pd.DataFrame({
+            "TARGET DE UNIDADES MILLAS": [
+                "TOTAL", 
+                "UNIDADES 3,000 + MILLAS", 
+                "UNIDADES 2,500 - 3,000 MILLAS", 
+                "UNIDADES 2,000-2,500 MILLAS", 
+                "UNIDADES 1,500 - 2,000 MILLAS", 
+                "UNIDADES BAJO 1,500 MILLAS"
+            ],
+            "3,000 MILLAS": [tot_uni, t_3000, t_2500, t_2000, t_1500, t_bajo]
+        })
+        
+        # --- NUEVOS INDICADORES PROPUESTOS ---
+        st.markdown("### 🌟 Nuevos Indicadores Estratégicos Propuestos")
         c1, c2, c3 = st.columns(3)
-        c1.metric("1. Cartera Total Vigente", f"${cartera_total:,.2f}")
-        c2.metric("2. Clientes con Saldo Pendiente", f"{total_clientes}")
-        c3.metric("3. Promedio de Deuda por Cliente", f"${promedio_deuda:,.2f}")
+        
+        pct_meta = ((t_3000 + t_2500) / tot_uni * 100) if tot_uni > 0 else 0
+        millas_totales = df_rep["Millas_Calc"].sum()
+        promedio_millas = millas_totales / tot_uni if tot_uni > 0 else 0
+        
+        # Indicador 1: % de unidades que están en la zona verde (Rentabilidad)
+        c1.metric("Eficiencia de Meta (>2,500 mi)", f"{pct_meta:.1f}%", "Unidades rentables")
+        # Indicador 2: Producción total de millas en el reporte
+        c2.metric("Total de St. Miles Generadas", f"{millas_totales:,.1f} mi")
+        # Indicador 3: Millas promedio por unidad de la flotilla actual
+        c3.metric("Promedio de Millas por Unidad", f"{promedio_millas:,.1f} mi")
         
         st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🏆 Top 10 Clientes Deudores")
-            df_top10 = df_ar.groupby(col_cliente)[col_total].sum().reset_index().sort_values(by=col_total, ascending=False).head(10)
+        st.markdown("### 📊 Tablas de Resumen Generadas (Formato BSCF Oficial)")
+        colA, colB = st.columns(2)
+        with colA:
+            st.markdown("**Desglose de Cargas**")
+            st.dataframe(df_res_loads.set_index("Categoría"), use_container_width=True)
+        with colB:
+            st.markdown("**Target de Unidades Millas**")
+            st.dataframe(df_res_target.set_index("TARGET DE UNIDADES MILLAS"), use_container_width=True)
             
-            fig_top = px.bar(
-                df_top10, x=col_total, y=col_cliente, orientation='h', text=col_total,
-                color=col_total, color_continuous_scale="Reds"
-            )
-            fig_top.update_traces(texttemplate='$%{text:,.0f}', textposition='outside')
-            fig_top.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_title="Deuda Total ($)", yaxis_title="Cliente")
-            st.plotly_chart(fig_top, use_container_width=True)
-            
-        with col2:
-            st.subheader("📅 Distribución por Antigüedad (Aging)")
-            aging_cols = [c for c in df_ar.columns if any(x in str(c).lower() for x in ['current', 'corriente', '1-30', '31-60', '61-90', '>90', '90+', 'over'])]
-            
-            if aging_cols:
-                for c in aging_cols:
-                    df_ar[c] = pd.to_numeric(df_ar[c], errors="coerce").fillna(0)
-                aging_sums = df_ar[aging_cols].sum().reset_index()
-                aging_sums.columns = ['Antigüedad', 'Monto']
-                
-                fig_aging = px.pie(
-                    aging_sums, names='Antigüedad', values='Monto', hole=0.4, 
-                    color_discrete_sequence=px.colors.sequential.OrRd
-                )
-                fig_aging.update_traces(textposition='inside', textinfo='percent+label')
-                st.plotly_chart(fig_aging, use_container_width=True)
-            else:
-                st.info("💡 La gráfica de pastel no está disponible porque el Excel subido no tiene las columnas clásicas de rangos de días (Current, 1-30, etc.).")
-        
         st.markdown("---")
-        st.subheader("📋 Detalle Completo del Reporte AR Aging")
-        st.dataframe(df_ar, use_container_width=True)
+        st.subheader("📋 Vista Previa de los Datos Extraídos de Report_3.xlsx")
+        st.dataframe(df_rep, use_container_width=True)
+        
+    except FileNotFoundError:
+        st.warning("⚠️ No se encontró el archivo 'Report_3.xlsx' localmente. Por favor, sube el archivo en el panel izquierdo (barra lateral) para visualizar las tablas.")
+    except Exception as e:
+        st.error(f"Error procesando el archivo: {e}")
 
 # ==========================================
 # PIE DE PÁGINA
