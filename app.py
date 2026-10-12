@@ -20,19 +20,19 @@ st.markdown("Vista general consolidada con carga directa de archivos locales.")
 st.markdown("---")
 
 # ==========================================
-# 2. DATOS OFICIALES DE LA SEMANA ACTUAL (BSCF)
+# 2. DATOS OFICIALES DE LA SEMANA ACTUAL (IMAGEN 32919.jpg)
 # ==========================================
-total_loads_actual = 121
-expo_actual = 45
+total_loads_actual = 126
+expo_actual = 47
 nb_actual = 0
-sb_actual = 76
+sb_actual = 79
 
-total_unidades_target = 44
-u_3000_plus = 21
-u_2500_3000 = 14
-u_2000_2500 = 6
-u_1500_2000 = 3
-u_bajo_1500 = 0
+total_unidades_target = 50
+u_3000_plus = 23
+u_2500_3000 = 12
+u_2000_2500 = 4
+u_1500_2000 = 6
+u_bajo_1500 = 5
 
 # ==========================================
 # 3. CARGA DE ARCHIVO LOCAL (FILE UPLOADER)
@@ -49,7 +49,6 @@ if uploaded_file is not None:
     if uploaded_file.name.endswith(".csv"):
       df_raw = pd.read_csv(uploaded_file)
     else:
-      # Lee el archivo omitiendo las primeras 7 filas de encabezado institucional si aplica
       df_raw = pd.read_excel(uploaded_file, header=7)
     st.sidebar.success("¡Archivo cargado correctamente!")
   except Exception as e:
@@ -58,8 +57,6 @@ if uploaded_file is not None:
 # Procesamiento de los datos del archivo subido
 if not df_raw.empty:
   df_raw.columns = df_raw.columns.astype(str).str.strip()
-  if len(df_raw) > 0 and "Total" not in str(df_raw.iloc[-1].values):
-    pass
 
   date_col = df_raw.columns[9] if len(df_raw.columns) >= 10 else "Pickup"
   if date_col in df_raw.columns:
@@ -218,6 +215,16 @@ if modo_analisis == "General (Gerencia / Dirección)":
     )
     st.plotly_chart(fig_target, use_container_width=True)
 
+  st.markdown("---")
+  st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
+  st.info("""
+    - **318:** Ya no volvió a salir.
+    - **333:** Camión descompuesto en norte.
+    - **340:** Ya no volvió a salir de viaje.
+    - **347:** Op de esta unidad llegó de descanso y salió para entregar prox semana.
+    - **610:** Camión salió hasta viernes.
+    """)
+
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
   st.title("⏱ Análisis Comparativo: Semana Anterior vs. Semana Actual")
 
@@ -234,7 +241,7 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
           "UNIDADES BAJO 1,500 MILLAS",
           "TOTAL UNIDADES TARGET",
       ],
-      "Semana Anterior": [43, 0, 72, 115, 23, 15, 2, 1, 8, 49],
+      "Semana Anterior": [45, 0, 76, 121, 22, 16, 5, 1, 2, 46],
       "Semana Actual": [
           expo_actual,
           nb_actual,
@@ -264,17 +271,17 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
   c1.metric(
       "Total Loads (Semana Actual)",
       f"{total_loads_actual} loads",
-      "+6 vs sem. anterior",
+      "+5 vs sem. anterior",
   )
   c2.metric(
       "Unidades > 3,000 Millas",
       f"{u_3000_plus} unidades",
-      "-2 vs sem. anterior",
+      "+1 vs sem. anterior",
   )
   c3.metric(
       "Total Unidades Evaluadas",
       f"{total_unidades_target} unidades",
-      "-5 vs sem. anterior",
+      "+4 vs sem. anterior",
   )
 
   st.markdown("---")
@@ -492,4 +499,3 @@ elif modo_analisis == "Generador de Resumen (Automático)":
 # ==========================================
 st.markdown("---")
 st.caption("Sistema de Control Privado - Morgan Express © 2026")
-        
