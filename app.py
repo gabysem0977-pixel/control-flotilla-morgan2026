@@ -20,19 +20,19 @@ st.markdown("Vista general consolidada con carga directa de archivos locales.")
 st.markdown("---")
 
 # ==========================================
-# 2. DATOS OFICIALES DE LA SEMANA ACTUAL (IMAGEN 32919.jpg)
+# 2. DATOS OFICIALES DE LA SEMANA ACTUAL (IMAGEN 34554.jpg)
 # ==========================================
-total_loads_actual = 126
-expo_actual = 47
+total_loads_actual = 134
+expo_actual = 53
 nb_actual = 0
-sb_actual = 79
+sb_actual = 81
 
-total_unidades_target = 50
-u_3000_plus = 23
-u_2500_3000 = 12
-u_2000_2500 = 4
-u_1500_2000 = 6
-u_bajo_1500 = 5
+total_unidades_target = 51
+u_3000_plus = 19
+u_2500_3000 = 14
+u_2000_2500 = 12
+u_1500_2000 = 3
+u_bajo_1500 = 3
 
 # ==========================================
 # 3. CARGA DE ARCHIVO LOCAL (FILE UPLOADER)
@@ -162,7 +162,7 @@ if modo_analisis == "General (Gerencia / Dirección)":
   )
   col3.metric("3. Flotilla Activa Target", f"{total_unidades_target} unidades")
   col4.metric(
-      "4. Unidades > 3,000 Millas", f"{u_3000_plus} un.", "Meta cumplida"
+      "4. Unidades > 3,000 Millas", f"{u_3000_plus} un.", "Pendiente de Meta"
   )
 
   st.markdown("---")
@@ -218,11 +218,8 @@ if modo_analisis == "General (Gerencia / Dirección)":
   st.markdown("---")
   st.subheader("📝 Comentarios y Observaciones de la Semana Actual")
   st.info("""
-    - **318:** Ya no volvió a salir.
-    - **333:** Camión descompuesto en norte.
-    - **340:** Ya no volvió a salir de viaje.
-    - **347:** Op de esta unidad llegó de descanso y salió para entregar prox semana.
-    - **610:** Camión salió hasta viernes.
+    - **321:** Ops team no salieron por situacion familiar.
+    - **612:** No salio por cuestion de taller.
     """)
 
 elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
@@ -241,7 +238,7 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
           "UNIDADES BAJO 1,500 MILLAS",
           "TOTAL UNIDADES TARGET",
       ],
-      "Semana Anterior": [45, 0, 76, 121, 22, 16, 5, 1, 2, 46],
+      "Semana Anterior": [47, 0, 79, 126, 23, 12, 4, 6, 5, 50],
       "Semana Actual": [
           expo_actual,
           nb_actual,
@@ -271,17 +268,17 @@ elif modo_analisis == "Semana Anterior vs. Actual (Comparativo)":
   c1.metric(
       "Total Loads (Semana Actual)",
       f"{total_loads_actual} loads",
-      "+5 vs sem. anterior",
+      "+8 vs sem. anterior",
   )
   c2.metric(
       "Unidades > 3,000 Millas",
       f"{u_3000_plus} unidades",
-      "+1 vs sem. anterior",
+      "-4 vs sem. anterior",
   )
   c3.metric(
       "Total Unidades Evaluadas",
       f"{total_unidades_target} unidades",
-      "+4 vs sem. anterior",
+      "+1 vs sem. anterior",
   )
 
   st.markdown("---")
