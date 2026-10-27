@@ -16,7 +16,6 @@ st.set_page_config(
 )
 
 st.title("🚚 Dashboard Ejecutivo - Control de Flotilla")
-st.markdown("Dashboard automatizado con lectura de imágenes por Inteligencia Artificial.")
 st.markdown("---")
 
 # ==========================================
