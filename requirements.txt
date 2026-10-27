@@ -4,3 +4,7 @@ openpyxl
 xlrd
 plotly
 st-gsheets-connection
+google-generativeai
+Pillow
+
+
